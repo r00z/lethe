@@ -30,14 +30,14 @@ class Settings(BaseSettings):
             return []
         return [int(x.strip()) for x in self.telegram_allowed_user_ids.split(",") if x.strip()]
 
-    # Letta
+    # Letta (default: Letta Cloud)
     letta_base_url: str = Field(
-        default="http://localhost:8283",
-        description="Letta server URL",
+        default="https://api.letta.com",
+        description="Letta server URL (default: Letta Cloud, use http://localhost:8283 for local server)",
     )
     letta_api_key: Optional[str] = Field(
         default=None,
-        description="Letta API key (for cloud or auth-enabled server)",
+        description="Letta API key (required for Letta Cloud, get from https://app.letta.com)",
     )
 
     # Agent

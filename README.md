@@ -35,7 +35,7 @@ Lethe is a 24/7 AI assistant that you communicate with via Telegram. It processe
 
 - Python 3.11+
 - [uv](https://github.com/astral-sh/uv) for dependency management
-- Local [Letta server](https://github.com/letta-ai/letta) running
+- [Letta Cloud](https://app.letta.com) API key (free tier available) or local Letta server
 - Telegram bot token from [@BotFather](https://t.me/BotFather)
 
 ### 2. Install
@@ -52,26 +52,34 @@ cp .env.example .env
 # Edit .env with your settings:
 # - TELEGRAM_BOT_TOKEN (required)
 # - TELEGRAM_ALLOWED_USER_IDS (your Telegram user ID)
-# - LETTA_BASE_URL (default: http://localhost:8283)
+# - LETTA_API_KEY (get from https://app.letta.com)
 ```
 
-### 4. Start Letta Server
-
-```bash
-# Option 1: Docker
-docker run -d -p 8283:8283 -v letta-data:/root/.letta letta/letta:latest
-
-# Option 2: pip
-pip install letta
-letta server
-```
-
-### 5. Run Lethe
+### 4. Run Lethe
 
 ```bash
 uv run lethe
 # or
 uv run python -m lethe.main
+```
+
+### (Optional) Use Local Letta Server
+
+If you prefer to run Letta locally instead of using Letta Cloud:
+
+```bash
+# Start Letta server (Docker)
+docker run -d -p 8283:8283 -v letta-data:/root/.letta letta/letta:latest
+
+# Or via pip
+pip install letta
+letta server
+```
+
+Then set in `.env`:
+```bash
+LETTA_BASE_URL=http://localhost:8283
+# LETTA_API_KEY not needed for local server
 ```
 
 ## Configuration
@@ -82,8 +90,8 @@ uv run python -m lethe.main
 |----------|-------------|---------|
 | `TELEGRAM_BOT_TOKEN` | Bot token from BotFather | (required) |
 | `TELEGRAM_ALLOWED_USER_IDS` | Comma-separated user IDs | (empty = all) |
-| `LETTA_BASE_URL` | Letta server URL | `http://localhost:8283` |
-| `LETTA_API_KEY` | API key (if using cloud) | (empty) |
+| `LETTA_API_KEY` | API key from [Letta Cloud](https://app.letta.com) | (required for cloud) |
+| `LETTA_BASE_URL` | Letta server URL (for local server) | `https://api.letta.com` |
 | `LETHE_AGENT_NAME` | Agent name in Letta | `lethe` |
 | `LETHE_CONFIG_DIR` | Path to config files | `./config` |
 | `DB_PATH` | SQLite database path | `./data/lethe.db` |
