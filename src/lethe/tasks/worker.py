@@ -50,7 +50,7 @@ class TaskWorker:
     async def start(self):
         """Start the task worker loop."""
         self._running = True
-        logger.info("TaskWorker started")
+        logger.info("Background task worker started")
         
         while self._running:
             try:
@@ -104,7 +104,7 @@ class TaskWorker:
                 logger.exception(f"TaskWorker error: {e}")
                 await asyncio.sleep(1)  # Prevent tight error loop
         
-        logger.info("TaskWorker stopped")
+        logger.info("Background task worker stopped")
     
     async def stop(self):
         """Stop the task worker."""

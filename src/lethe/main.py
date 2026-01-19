@@ -108,7 +108,6 @@ async def run():
         tool_handlers=agent_manager._tool_handlers,
         on_task_complete=on_task_complete,
     )
-    logger.info("Background task worker created")
 
     # Set up shutdown handling
     shutdown_event = asyncio.Event()
