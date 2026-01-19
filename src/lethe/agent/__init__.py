@@ -111,18 +111,28 @@ class AgentManager:
                     for tc_id in tool_call_ids
                 ]
                 
-                await self.client.agents.messages.create(
-                    agent_id=agent_id,
-                    messages=[{
-                        "type": "approval",
-                        "approvals": approvals,
-                    }],
-                )
-                
-                for tc_id in tool_call_ids:
-                    logger.info(f"  Cleared: {tc_id}")
-                
-                cleared_any = True
+                try:
+                    await self.client.agents.messages.create(
+                        agent_id=agent_id,
+                        messages=[{
+                            "type": "approval",
+                            "approvals": approvals,
+                        }],
+                    )
+                    
+                    for tc_id in tool_call_ids:
+                        logger.info(f"  Cleared: {tc_id}")
+                    
+                    cleared_any = True
+                except Exception as deny_error:
+                    error_str = str(deny_error)
+                    if "Invalid tool call IDs" in error_str:
+                        # Race condition: state changed between fetch and deny
+                        # Continue to next iteration to get fresh state
+                        logger.warning(f"Tool call ID mismatch (state changed), retrying with fresh state...")
+                        continue
+                    else:
+                        raise
                 
                 # Continue loop to check if agent created new pending approvals
                 
