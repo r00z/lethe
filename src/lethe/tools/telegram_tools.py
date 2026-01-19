@@ -31,6 +31,48 @@ def clear_telegram_context():
     _current_chat_id.set(None)
 
 
+async def telegram_send_message_async(
+    text: str,
+    parse_mode: str = "",
+) -> str:
+    """Send a text message to the current Telegram chat.
+    
+    Use this to send multiple separate messages instead of one long response.
+    Each call sends immediately as a separate message.
+    
+    Args:
+        text: Message text to send
+        parse_mode: Optional parsing mode - "markdown", "html", or "" for plain text
+    
+    Returns:
+        JSON with success status
+    """
+    bot = _current_bot.get()
+    chat_id = _current_chat_id.get()
+    
+    if not bot or not chat_id:
+        raise RuntimeError("Telegram context not set. This tool can only be used during task processing.")
+    
+    # Map parse_mode
+    pm = None
+    if parse_mode.lower() == "markdown":
+        pm = "MarkdownV2"
+    elif parse_mode.lower() == "html":
+        pm = "HTML"
+    
+    result = await bot.send_message(
+        chat_id=chat_id,
+        text=text,
+        parse_mode=pm,
+    )
+    
+    return json.dumps({
+        "success": True,
+        "message_id": result.message_id,
+        "chat_id": chat_id,
+    })
+
+
 async def telegram_send_file_async(
     file_path_or_url: str,
     caption: str = "",
@@ -138,6 +180,26 @@ def _is_tool(func):
     """Decorator to mark a function as a tool."""
     func._is_tool = True
     return func
+
+
+@_is_tool
+def telegram_send_message(
+    text: str,
+    parse_mode: str = "",
+) -> str:
+    """Send a text message to the current Telegram chat.
+    
+    Use this to send multiple separate messages instead of one long response.
+    Each call sends immediately as a separate message bubble.
+    
+    Args:
+        text: Message text to send
+        parse_mode: Optional - "markdown", "html", or "" for plain text
+    
+    Returns:
+        JSON with success status and message_id
+    """
+    raise Exception("Client-side execution required")
 
 
 @_is_tool

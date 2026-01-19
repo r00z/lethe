@@ -284,6 +284,7 @@ I'll update this as I learn about my principal's current projects and priorities
         # Add Telegram tools
         from lethe.tools import telegram_tools
         self._tool_handlers.update({
+            "telegram_send_message": telegram_tools.telegram_send_message_async,
             "telegram_send_file": telegram_tools.telegram_send_file_async,
         })
         logger.info("Telegram tools registered")
@@ -553,6 +554,21 @@ I'll update this as I learn about my principal's current projects and priorities
             raise Exception("Client-side execution required")
         
         # Telegram tools
+        def telegram_send_message(text: str, parse_mode: str = "") -> str:
+            """Send a text message to the current Telegram chat.
+            
+            Use this to send multiple separate messages instead of one long response.
+            Each call sends immediately as a separate message bubble.
+            
+            Args:
+                text: Message text to send
+                parse_mode: Optional - "markdown", "html", or "" for plain text
+            
+            Returns:
+                JSON with success status and message_id
+            """
+            raise Exception("Client-side execution required")
+        
         def telegram_send_file(file_path_or_url: str, caption: str = "", as_document: bool = False) -> str:
             """Send a file or image to the current Telegram chat.
             
@@ -596,6 +612,7 @@ I'll update this as I learn about my principal's current projects and priorities
             browser_scroll,
             browser_close,
             # Telegram tools
+            telegram_send_message,
             telegram_send_file,
         ]
 

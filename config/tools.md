@@ -119,7 +119,22 @@ Browser tools for web automation. Uses Steel Browser + Playwright with persisten
 
 ## Telegram Tools
 
-Tools for sending files and media directly to the current Telegram chat.
+Tools for sending messages and files directly to the current Telegram chat.
+
+### telegram_send_message
+
+Send a text message immediately as a separate bubble. Use this when you want to send multiple short messages instead of one long response.
+
+```python
+# Send multiple separate messages
+telegram_send_message("First point...")
+telegram_send_message("Second point...")
+telegram_send_message("And finally...")
+```
+
+**Arguments:**
+- `text`: Message text to send
+- `parse_mode`: Optional - "markdown", "html", or "" for plain text
 
 ### telegram_send_file
 
