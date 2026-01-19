@@ -265,6 +265,8 @@ I'll update this as I learn about my principal's current projects and priorities
             "bash": cli.bash,
             "bash_output": cli.bash_output,
             "kill_bash": cli.kill_bash,
+            "get_terminal_screen": cli.get_terminal_screen,
+            "send_terminal_input": cli.send_terminal_input,
             "get_environment_info": cli.get_environment_info,
             "check_command_exists": cli.check_command_exists,
             # File tools
@@ -323,7 +325,7 @@ I'll update this as I learn about my principal's current projects and priorities
         # These are never executed - we handle them locally
         # Must use Google-style docstrings with Args section
         
-        def bash(command: str, timeout: int = 120, description: str = "", run_in_background: bool = False) -> str:
+        def bash(command: str, timeout: int = 120, description: str = "", run_in_background: bool = False, use_pty: bool = False) -> str:
             """Execute a bash command in the shell.
             
             Args:
@@ -331,18 +333,20 @@ I'll update this as I learn about my principal's current projects and priorities
                 timeout: Timeout in seconds (default: 120, max: 600)
                 description: Short description of what the command does
                 run_in_background: If True, run in background and return immediately
+                use_pty: If True, run in a pseudo-terminal (needed for TUI apps like htop, vim)
             
             Returns:
                 Command output, error message, or background process ID
             """
             raise Exception("Client-side execution required")
         
-        def bash_output(shell_id: str, filter_pattern: str = "") -> str:
+        def bash_output(shell_id: str, filter_pattern: str = "", last_lines: int = 0) -> str:
             """Get output from a background bash process.
             
             Args:
                 shell_id: The ID of the background shell (e.g., bash_1)
                 filter_pattern: Optional string to filter output lines
+                last_lines: If > 0, only return the last N lines (useful for logs)
             
             Returns:
                 The accumulated output from the background process
@@ -357,6 +361,32 @@ I'll update this as I learn about my principal's current projects and priorities
             
             Returns:
                 Success or failure message
+            """
+            raise Exception("Client-side execution required")
+        
+        def get_terminal_screen(shell_id: str) -> str:
+            """Get the current terminal screen for a PTY process.
+            
+            Use this for TUI applications (htop, vim, etc.) to see what's displayed.
+            
+            Args:
+                shell_id: The ID of the background PTY process
+            
+            Returns:
+                The current terminal screen content (what a user would see)
+            """
+            raise Exception("Client-side execution required")
+        
+        def send_terminal_input(shell_id: str, text: str, send_enter: bool = True) -> str:
+            """Send input to a PTY process (for TUI interaction).
+            
+            Args:
+                shell_id: The ID of the background PTY process
+                text: Text to send to the terminal
+                send_enter: If True, append Enter key after text (default True)
+            
+            Returns:
+                Confirmation message
             """
             raise Exception("Client-side execution required")
         
@@ -677,6 +707,8 @@ I'll update this as I learn about my principal's current projects and priorities
             bash,
             bash_output,
             kill_bash,
+            get_terminal_screen,
+            send_terminal_input,
             get_environment_info,
             check_command_exists,
             read_file,
