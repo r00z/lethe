@@ -1,5 +1,6 @@
 """Letta agent management with client-side tool execution."""
 
+import asyncio
 import json
 import logging
 from typing import Optional
@@ -19,6 +20,7 @@ class AgentManager:
         self._client: Optional[AsyncLetta] = None
         self._agent_id: Optional[str] = None
         self._tool_handlers: dict = {}  # Maps tool name to handler function
+        self._agent_lock: asyncio.Lock = asyncio.Lock()  # Serialize agent access
 
     @property
     def client(self) -> AsyncLetta:
@@ -778,6 +780,18 @@ I'll update this as I learn about my principal's current projects and priorities
         Returns:
             All assistant messages concatenated
         """
+        # Serialize access to agent - prevents race conditions between
+        # regular messages and heartbeat
+        async with self._agent_lock:
+            return await self._send_message_impl(message, context, on_message)
+    
+    async def _send_message_impl(
+        self,
+        message: str,
+        context: Optional[dict] = None,
+        on_message: Optional[callable] = None,
+    ) -> str:
+        """Internal implementation of send_message (called under lock)."""
         agent_id = await self.get_or_create_agent()
 
         # Format message with context if provided
@@ -805,6 +819,16 @@ I'll update this as I learn about my principal's current projects and priorities
                 if "PENDING_APPROVAL" in error_str:
                     logger.warning("Agent has pending approval from previous request, recovering...")
                     response = await self._recover_from_pending_approval(agent_id, messages, error_str)
+                elif "No tool call is currently awaiting approval" in error_str:
+                    # Agent state changed - our tool results are stale
+                    # This can happen if we're sending approval responses but agent moved on
+                    logger.warning("Agent not expecting tool results (state changed), retrying as regular message...")
+                    # Convert back to regular message if possible
+                    if messages and messages[0].get("type") == "approval":
+                        # Can't easily recover - just return what we have
+                        logger.warning("Cannot recover - agent state mismatch")
+                        break
+                    continue
                 else:
                     raise
             
