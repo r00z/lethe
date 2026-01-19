@@ -113,11 +113,15 @@ LETTA_BASE_URL=http://localhost:8283
 | `LETHE_CONFIG_DIR` | Path to config files | `./config` |
 | `DB_PATH` | SQLite database path | `./data/lethe.db` |
 
-### Config Files
+### Config Files (Initial Setup Only)
 
-- `config/identity.md` - Agent persona and capabilities (loaded into `persona` memory block)
-- `config/project.md` - Current project context (loaded into `project` memory block)
-- `config/tools.md` - CLI tools documentation (loaded into `tools` memory block)
+These files are loaded **only when the agent is first created**. After that, the agent's memory persists on Letta's servers and the config files are ignored. The agent can modify its own memory blocks at any time.
+
+- `config/identity.md` - Agent persona and capabilities → `persona` memory block
+- `config/project.md` - Current project context → `project` memory block
+- `config/tools.md` - CLI tools documentation → `tools` memory block
+
+To reset the agent to config file defaults, delete it from Letta and restart Lethe.
 
 ## Tools
 
