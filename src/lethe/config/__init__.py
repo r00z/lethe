@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     lethe_agent_model: str = Field(default="letta/letta-free", description="Model handle (e.g., letta/letta-free, anthropic/claude-sonnet-4-20250514)")
     lethe_config_dir: Path = Field(default=Path("./config"), description="Config directory")
 
+    # Hippocampus (memory retrieval subagent)
+    hippocampus_enabled: bool = Field(default=True, description="Enable hippocampus memory retrieval")
+    hippocampus_agent_name: str = Field(default="lethe-hippocampus", description="Hippocampus agent name")
+    hippocampus_model: str = Field(default="anthropic/claude-3-haiku-20240307", description="Cheap/fast model for hippocampus")
+
     # Database
     db_path: Path = Field(default=Path("./data/lethe.db"), description="SQLite database path")
 

@@ -3,11 +3,14 @@
 import asyncio
 import json
 import logging
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from letta_client import AsyncLetta
 
 from lethe.config import Settings, get_settings, load_config_file
+
+if TYPE_CHECKING:
+    from lethe.hippocampus import HippocampusManager
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +24,7 @@ class AgentManager:
         self._agent_id: Optional[str] = None
         self._tool_handlers: dict = {}  # Maps tool name to handler function
         self._agent_lock: asyncio.Lock = asyncio.Lock()  # Serialize agent access
+        self._hippocampus: Optional["HippocampusManager"] = None
 
     @property
     def client(self) -> AsyncLetta:
@@ -34,6 +38,57 @@ class AgentManager:
             else:
                 self._client = AsyncLetta(base_url=self.settings.letta_base_url)
         return self._client
+
+    @property
+    def hippocampus(self) -> "HippocampusManager":
+        """Get or create the hippocampus manager."""
+        if self._hippocampus is None:
+            from lethe.hippocampus import HippocampusManager
+            self._hippocampus = HippocampusManager(self.client, self.settings)
+        return self._hippocampus
+
+    async def get_recent_messages(self, limit: int = 10) -> list[dict]:
+        """Get recent messages from the agent's conversation history.
+        
+        Args:
+            limit: Maximum number of messages to return
+            
+        Returns:
+            List of messages with role and content
+        """
+        agent_id = await self.get_or_create_agent()
+        
+        try:
+            messages = await self.client.agents.messages.list(
+                agent_id=agent_id,
+                limit=limit,
+                order="desc",  # Most recent first
+            )
+            
+            result = []
+            msg_list = list(messages) if not hasattr(messages, '__aiter__') else [m async for m in messages]
+            
+            for msg in msg_list:
+                msg_type = getattr(msg, 'message_type', None)
+                if msg_type in ('user_message', 'assistant_message'):
+                    content = msg.content
+                    if isinstance(content, list):
+                        # Extract text from multi-part content
+                        text_parts = []
+                        for part in content:
+                            if hasattr(part, 'text'):
+                                text_parts.append(part.text)
+                        content = " ".join(text_parts)
+                    
+                    role = 'user' if msg_type == 'user_message' else 'assistant'
+                    result.append({"role": role, "content": content})
+            
+            # Reverse to chronological order
+            return list(reversed(result))
+            
+        except Exception as e:
+            logger.warning(f"Failed to get recent messages: {e}")
+            return []
 
     async def clear_pending_approvals(self, agent_id: str, max_iterations: int = 5) -> bool:
         """Clear any pending approval requests from previous sessions.
@@ -926,6 +981,20 @@ I'll update this as I learn about my principal's current projects and priorities
     ) -> str:
         """Internal implementation of send_message (called under lock)."""
         agent_id = await self.get_or_create_agent()
+
+        # Hippocampus: Analyze for topic change and augment with memories
+        # Skip for system messages (heartbeats, etc.)
+        is_system_message = message.startswith("[HEARTBEAT]") or message.startswith("[SYSTEM]")
+        if self.settings.hippocampus_enabled and not is_system_message:
+            try:
+                recent_messages = await self.get_recent_messages(limit=5)
+                message = await self.hippocampus.augment_message(
+                    main_agent_id=agent_id,
+                    new_message=message,
+                    recent_messages=recent_messages,
+                )
+            except Exception as e:
+                logger.warning(f"Hippocampus augmentation failed (continuing without): {e}")
 
         # Format message with context if provided
         if context:
