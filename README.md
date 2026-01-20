@@ -19,6 +19,7 @@ Build a **fully autonomous, personified AI assistant** that:
 - 🌱 **Learns continuously** - Improves its knowledge and adapts to your preferences over time
 - 🤖 **Feels like a colleague** - Anthropomorphic presence with consistent personality and expertise
 - ⚡ **Operates 24/7** - Always available, processes tasks asynchronously in the background
+- 😈 **A little scary to operate** - Full system access, relentless self-improvement, YOLO
 
 ## Self-Modifying Agent
 
