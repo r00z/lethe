@@ -1,4 +1,9 @@
-"""CLI/shell tools for the agent - Bash-like implementation."""
+"""CLI/shell tools for the agent - Bash-like implementation.
+
+Supports two modes:
+1. Regular: subprocess with stdout/stderr capture (for most commands)
+2. PTY: pseudo-terminal with screen emulation (for TUI apps like htop, vim, etc.)
+"""
 
 import os
 import subprocess
@@ -9,6 +14,7 @@ from pathlib import Path
 from lethe.tools.process_manager import (
     BackgroundProcess,
     background_processes,
+    create_pty_process,
     get_next_bash_id,
     get_process,
     list_processes,
@@ -41,6 +47,7 @@ def bash(
     timeout: int = DEFAULT_TIMEOUT,
     description: str = "",
     run_in_background: bool = False,
+    use_pty: bool = False,
 ) -> str:
     """Execute a bash command in the shell.
     
@@ -49,6 +56,7 @@ def bash(
         timeout: Timeout in seconds (default: 120, max: 600)
         description: Short description of what the command does
         run_in_background: If True, run in background and return immediately
+        use_pty: If True, run in a pseudo-terminal (needed for TUI apps like htop, vim)
     
     Returns:
         Command output, error message, or background process ID
@@ -65,18 +73,24 @@ def bash(
             if proc.start_time:
                 elapsed = (datetime.now() - proc.start_time).total_seconds()
                 runtime = f", runtime: {int(elapsed)}s"
-            lines.append(f"{shell_id}: {proc.command} ({proc.status}{runtime})")
+            mode = "PTY" if proc.is_pty else "subprocess"
+            lines.append(f"{shell_id}: {proc.command} ({proc.status}, {mode}{runtime})")
         return "\n".join(lines)
     
     cwd = os.environ.get("USER_CWD", os.getcwd())
-    env = {**os.environ, "TERM": "dumb"}
+    env = {**os.environ}
     
     # Clamp timeout
     effective_timeout = max(1, min(timeout, MAX_TIMEOUT))
     
     if run_in_background:
-        return _run_background(command, cwd, env, effective_timeout)
+        if use_pty:
+            return _run_background_pty(command, cwd, env)
+        else:
+            env["TERM"] = "dumb"
+            return _run_background(command, cwd, env, effective_timeout)
     else:
+        env["TERM"] = "dumb"
         return _run_foreground(command, cwd, env, effective_timeout)
 
 
@@ -116,7 +130,7 @@ def _run_foreground(command: str, cwd: str, env: dict, timeout: int) -> str:
 
 
 def _run_background(command: str, cwd: str, env: dict, timeout: int) -> str:
-    """Run a command in the background."""
+    """Run a command in the background (regular subprocess mode)."""
     bash_id = get_next_bash_id()
     
     try:
@@ -181,13 +195,23 @@ def _run_background(command: str, cwd: str, env: dict, timeout: int) -> str:
         return f"Error starting background command: {e}"
 
 
+def _run_background_pty(command: str, cwd: str, env: dict) -> str:
+    """Run a command in a PTY (for TUI apps)."""
+    try:
+        bash_id, bg_proc = create_pty_process(command, cwd, env)
+        return f"Command running in PTY with ID: {bash_id} (use get_terminal_screen to view)"
+    except Exception as e:
+        return f"Error starting PTY command: {e}"
+
+
 @_is_tool
-def bash_output(shell_id: str, filter_pattern: str = "") -> str:
+def bash_output(shell_id: str, filter_pattern: str = "", last_lines: int = 0) -> str:
     """Get output from a background bash process.
     
     Args:
         shell_id: The ID of the background shell (e.g., bash_1)
         filter_pattern: Optional string to filter output lines
+        last_lines: If > 0, only return the last N lines (useful for logs)
     
     Returns:
         The accumulated output from the background process
@@ -195,6 +219,14 @@ def bash_output(shell_id: str, filter_pattern: str = "") -> str:
     proc = get_process(shell_id)
     if not proc:
         return f"No background process found with ID: {shell_id}"
+    
+    # For PTY processes, suggest using get_terminal_screen instead
+    if proc.is_pty:
+        return (
+            f"Process {shell_id} is running in PTY mode.\n"
+            f"Use get_terminal_screen('{shell_id}') to view the terminal screen.\n"
+            f"Status: {proc.status}"
+        )
     
     # Combine stdout and stderr
     stdout = "\n".join(proc.stdout)
@@ -210,6 +242,15 @@ def bash_output(shell_id: str, filter_pattern: str = "") -> str:
         lines = [line for line in lines if filter_pattern in line]
         output = "\n".join(lines)
     
+    # Apply last_lines limit
+    if last_lines > 0:
+        lines = output.split("\n")
+        if len(lines) > last_lines:
+            lines = lines[-last_lines:]
+            output = f"... [{len(proc.stdout) + len(proc.stderr) - last_lines} earlier lines]\n" + "\n".join(lines)
+        else:
+            output = "\n".join(lines)
+    
     output = _truncate_output(output)
     
     if not output:
@@ -219,6 +260,73 @@ def bash_output(shell_id: str, filter_pattern: str = "") -> str:
         return f"(no output yet){status_info}"
     
     return output
+
+
+@_is_tool
+def get_terminal_screen(shell_id: str) -> str:
+    """Get the current terminal screen for a PTY process.
+    
+    Use this for TUI applications (htop, vim, etc.) to see what's currently displayed.
+    
+    Args:
+        shell_id: The ID of the background PTY process
+    
+    Returns:
+        The current terminal screen content (what a user would see)
+    """
+    proc = get_process(shell_id)
+    if not proc:
+        return f"No background process found with ID: {shell_id}"
+    
+    if not proc.is_pty:
+        return (
+            f"Process {shell_id} is not running in PTY mode.\n"
+            f"Use bash_output('{shell_id}') to view output.\n"
+            f"To run in PTY mode, use: bash(command, run_in_background=True, use_pty=True)"
+        )
+    
+    screen_text = proc.get_screen_text()
+    cursor_row, cursor_col = proc.get_cursor_position()
+    
+    # Add status info
+    status_line = f"\n--- Process: {proc.status}"
+    if proc.exit_code is not None:
+        status_line += f", exit code: {proc.exit_code}"
+    status_line += f", cursor: ({cursor_row}, {cursor_col}) ---"
+    
+    return screen_text + status_line
+
+
+@_is_tool
+def send_terminal_input(shell_id: str, text: str, send_enter: bool = True) -> str:
+    """Send input to a PTY process (for TUI interaction).
+    
+    Args:
+        shell_id: The ID of the background PTY process
+        text: Text to send to the terminal
+        send_enter: If True, append Enter key after text (default True)
+    
+    Returns:
+        Confirmation message
+    """
+    proc = get_process(shell_id)
+    if not proc:
+        return f"No background process found with ID: {shell_id}"
+    
+    if not proc.is_pty:
+        return f"Process {shell_id} is not running in PTY mode. Cannot send input."
+    
+    if proc.status != "running":
+        return f"Process {shell_id} is not running (status: {proc.status})"
+    
+    try:
+        input_text = text
+        if send_enter:
+            input_text += "\n"
+        proc.write_input(input_text)
+        return f"Sent input to {shell_id}: {repr(text)}"
+    except Exception as e:
+        return f"Error sending input: {e}"
 
 
 @_is_tool
@@ -237,9 +345,14 @@ def kill_bash(shell_id: str) -> str:
     
     try:
         if proc.status == "running":
-            proc.process.kill()
-            proc.status = "failed"
-            proc.stderr.append("Process killed by user")
+            if proc.is_pty and proc.pty_pid:
+                # Kill PTY process
+                import signal
+                os.kill(proc.pty_pid, signal.SIGTERM)
+                proc.status = "failed"
+            elif proc.process:
+                proc.process.kill()
+                proc.status = "failed"
         
         remove_process(shell_id)
         return f"Killed background process: {shell_id}"

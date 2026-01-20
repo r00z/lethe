@@ -99,6 +99,7 @@ class AgentManager:
                     break
                 
                 logger.info(f"Found {len(tool_call_ids)} pending approval(s), clearing... (iteration {iteration + 1})")
+                logger.debug(f"  Tool call IDs to deny: {tool_call_ids}")
                 
                 # Deny all pending approvals
                 approvals = [
@@ -111,18 +112,42 @@ class AgentManager:
                     for tc_id in tool_call_ids
                 ]
                 
-                await self.client.agents.messages.create(
-                    agent_id=agent_id,
-                    messages=[{
-                        "type": "approval",
-                        "approvals": approvals,
-                    }],
-                )
-                
-                for tc_id in tool_call_ids:
-                    logger.info(f"  Cleared: {tc_id}")
-                
-                cleared_any = True
+                try:
+                    import asyncio as _asyncio
+                    # Timeout denial to prevent hanging (30 seconds should be plenty)
+                    await _asyncio.wait_for(
+                        self.client.agents.messages.create(
+                            agent_id=agent_id,
+                            messages=[{
+                                "type": "approval",
+                                "approvals": approvals,
+                            }],
+                        ),
+                        timeout=30.0
+                    )
+                    
+                    for tc_id in tool_call_ids:
+                        logger.info(f"  Cleared: {tc_id}")
+                    
+                    cleared_any = True
+                except _asyncio.TimeoutError:
+                    logger.warning("Denial request timed out after 30s, retrying with fresh state...")
+                    continue
+                except Exception as deny_error:
+                    error_str = str(deny_error)
+                    if "Invalid tool call IDs" in error_str:
+                        # Race condition: state changed between fetch and deny
+                        # Continue to next iteration to get fresh state
+                        logger.warning(f"Tool call ID mismatch (state changed), retrying with fresh state...")
+                        continue
+                    elif "No tool call is currently awaiting approval" in error_str:
+                        # Approval already cleared (timed out or cleared by another process)
+                        # This is fine - the approval is gone which is what we wanted
+                        logger.info("Approval already cleared (timed out or handled elsewhere)")
+                        cleared_any = True
+                        continue
+                    else:
+                        raise
                 
                 # Continue loop to check if agent created new pending approvals
                 
@@ -265,6 +290,8 @@ I'll update this as I learn about my principal's current projects and priorities
             "bash": cli.bash,
             "bash_output": cli.bash_output,
             "kill_bash": cli.kill_bash,
+            "get_terminal_screen": cli.get_terminal_screen,
+            "send_terminal_input": cli.send_terminal_input,
             "get_environment_info": cli.get_environment_info,
             "check_command_exists": cli.check_command_exists,
             # File tools
@@ -302,6 +329,16 @@ I'll update this as I learn about my principal's current projects and priorities
             "telegram_send_file": telegram_tools.telegram_send_file_async,
         })
         logger.info("Telegram tools registered")
+        
+        # Add Task management tools
+        from lethe.tasks import tools as task_tools
+        self._tool_handlers.update({
+            "spawn_task": task_tools.spawn_task_async,
+            "get_tasks": task_tools.get_tasks_async,
+            "get_task_status": task_tools.get_task_status_async,
+            "cancel_task": task_tools.cancel_task_async,
+        })
+        logger.info("Task management tools registered")
 
     async def _register_tools(self) -> list[str]:
         """Register client-side tools with Letta. Returns list of tool names."""
@@ -313,7 +350,7 @@ I'll update this as I learn about my principal's current projects and priorities
         # These are never executed - we handle them locally
         # Must use Google-style docstrings with Args section
         
-        def bash(command: str, timeout: int = 120, description: str = "", run_in_background: bool = False) -> str:
+        def bash(command: str, timeout: int = 120, description: str = "", run_in_background: bool = False, use_pty: bool = False) -> str:
             """Execute a bash command in the shell.
             
             Args:
@@ -321,18 +358,20 @@ I'll update this as I learn about my principal's current projects and priorities
                 timeout: Timeout in seconds (default: 120, max: 600)
                 description: Short description of what the command does
                 run_in_background: If True, run in background and return immediately
+                use_pty: If True, run in a pseudo-terminal (needed for TUI apps like htop, vim)
             
             Returns:
                 Command output, error message, or background process ID
             """
             raise Exception("Client-side execution required")
         
-        def bash_output(shell_id: str, filter_pattern: str = "") -> str:
+        def bash_output(shell_id: str, filter_pattern: str = "", last_lines: int = 0) -> str:
             """Get output from a background bash process.
             
             Args:
                 shell_id: The ID of the background shell (e.g., bash_1)
                 filter_pattern: Optional string to filter output lines
+                last_lines: If > 0, only return the last N lines (useful for logs)
             
             Returns:
                 The accumulated output from the background process
@@ -347,6 +386,32 @@ I'll update this as I learn about my principal's current projects and priorities
             
             Returns:
                 Success or failure message
+            """
+            raise Exception("Client-side execution required")
+        
+        def get_terminal_screen(shell_id: str) -> str:
+            """Get the current terminal screen for a PTY process.
+            
+            Use this for TUI applications (htop, vim, etc.) to see what's displayed.
+            
+            Args:
+                shell_id: The ID of the background PTY process
+            
+            Returns:
+                The current terminal screen content (what a user would see)
+            """
+            raise Exception("Client-side execution required")
+        
+        def send_terminal_input(shell_id: str, text: str, send_enter: bool = True) -> str:
+            """Send input to a PTY process (for TUI interaction).
+            
+            Args:
+                shell_id: The ID of the background PTY process
+                text: Text to send to the terminal
+                send_enter: If True, append Enter key after text (default True)
+            
+            Returns:
+                Confirmation message
             """
             raise Exception("Client-side execution required")
         
@@ -602,10 +667,73 @@ I'll update this as I learn about my principal's current projects and priorities
             """
             raise Exception("Client-side execution required")
         
+        # Task management tools
+        def spawn_task(description: str, mode: str = "worker", priority: str = "normal") -> str:
+            """Spawn a background task to work on something while you continue chatting.
+            
+            Use this when asked to do something that takes time (research, analysis, etc.).
+            The task runs in the background while you remain responsive to the user.
+            
+            Execution modes:
+            - "worker": Simple local execution with tools (fast, lightweight)
+            - "subagent": Spawn a full Letta subagent (has memory, more capable)
+            - "background": Run on your own context in background mode
+            
+            Args:
+                description: Detailed description of what the task should accomplish
+                mode: Execution mode - "worker", "subagent", or "background"
+                priority: Task priority - "low", "normal", "high", or "urgent"
+            
+            Returns:
+                JSON with task_id to track progress
+            """
+            raise Exception("Client-side execution required")
+        
+        def get_tasks(status: str = "", limit: int = 10) -> str:
+            """Get a list of background tasks.
+            
+            Use this to check what tasks are pending, running, or completed.
+            
+            Args:
+                status: Filter by status - "pending", "running", "completed", "failed", "cancelled", or "" for all
+                limit: Maximum number of tasks to return (default 10)
+            
+            Returns:
+                JSON with list of tasks and statistics
+            """
+            raise Exception("Client-side execution required")
+        
+        def get_task_status(task_id: str) -> str:
+            """Get detailed status of a specific task.
+            
+            Args:
+                task_id: The task ID to check
+            
+            Returns:
+                JSON with detailed task info including progress and events
+            """
+            raise Exception("Client-side execution required")
+        
+        def cancel_task(task_id: str) -> str:
+            """Cancel a pending or running task.
+            
+            Pending tasks are cancelled immediately.
+            Running tasks will stop at the next checkpoint.
+            
+            Args:
+                task_id: The task ID to cancel
+            
+            Returns:
+                JSON with cancellation result
+            """
+            raise Exception("Client-side execution required")
+        
         stub_functions = [
             bash,
             bash_output,
             kill_bash,
+            get_terminal_screen,
+            send_terminal_input,
             get_environment_info,
             check_command_exists,
             read_file,
@@ -628,6 +756,11 @@ I'll update this as I learn about my principal's current projects and priorities
             # Telegram tools
             telegram_send_message,
             telegram_send_file,
+            # Task management tools
+            spawn_task,
+            get_tasks,
+            get_task_status,
+            cancel_task,
         ]
 
         for func in stub_functions:
