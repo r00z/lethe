@@ -858,25 +858,9 @@ I'll update this as I learn about my principal's current projects and priorities
         # First, register all tools with Letta (upsert ensures they exist)
         expected_tool_names = await self._register_tools()
         
-        # Add built-in Letta tools (DO NOT detach these!)
-        # Note: send_message is deprecated for modern agents (letta_v1_agent)
-        # Modern agents respond via assistant_message directly
-        builtin_tools = [
-            # Web tools
-            "web_search",
-            "fetch_webpage", 
-            # Archival memory
-            "archival_memory_insert",
-            "archival_memory_search",
-            # Core memory management
-            "memory_insert",
-            "memory_replace",
-            "memory_rethink",
-            "memory_finish_edits",
-            # Conversation
-            "conversation_search",
-        ]
-        expected_tool_names.extend(builtin_tools)
+        # Note: We don't list built-in Letta tools here.
+        # They are managed automatically when include_base_tools=True at agent creation.
+        # Only sync our custom tools to avoid conflicts with Letta-managed tools.
         expected_set = set(expected_tool_names)
         
         # Get agent's current tools
@@ -921,9 +905,19 @@ I'll update this as I learn about my principal's current projects and priorities
                     logger.warning(f"  Tool not found in registry: {tool_name}")
         
         # Detach extra tools (no longer in codebase)
-        if extra_tools:
-            logger.info(f"Detaching {len(extra_tools)} removed tools: {extra_tools}")
-            for tool_name in extra_tools:
+        # But skip Letta built-in tools - they're managed by include_base_tools=True
+        letta_builtin_tools = {
+            "web_search", "fetch_webpage",
+            "archival_memory_insert", "archival_memory_search",
+            "memory", "memory_insert", "memory_replace", "memory_rethink", "memory_finish_edits",
+            "conversation_search", "send_message",
+            "core_memory_append", "core_memory_replace",  # deprecated but may exist
+        }
+        extra_custom_tools = extra_tools - letta_builtin_tools
+        
+        if extra_custom_tools:
+            logger.info(f"Detaching {len(extra_custom_tools)} removed custom tools: {extra_custom_tools}")
+            for tool_name in extra_custom_tools:
                 tool_id = current_tools.get(tool_name)
                 if tool_id:
                     try:
