@@ -859,6 +859,8 @@ I'll update this as I learn about my principal's current projects and priorities
         expected_tool_names = await self._register_tools()
         
         # Add built-in Letta tools (DO NOT detach these!)
+        # Note: send_message is deprecated for modern agents (letta_v1_agent)
+        # Modern agents respond via assistant_message directly
         builtin_tools = [
             # Web tools
             "web_search",
@@ -873,8 +875,6 @@ I'll update this as I learn about my principal's current projects and priorities
             "memory_finish_edits",
             # Conversation
             "conversation_search",
-            # Messaging
-            "send_message",
         ]
         expected_tool_names.extend(builtin_tools)
         expected_set = set(expected_tool_names)
