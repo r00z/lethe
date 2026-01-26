@@ -242,14 +242,18 @@ async def browser_fill_async(value: str, selector: str = "", label: str = "", ti
         raise RuntimeError(f"browser_fill failed: {e}")
 
 
-async def browser_screenshot_async(full_page: bool = False) -> str:
-    """Take a screenshot.
+async def browser_screenshot_async(full_page: bool = False, save_path: str = "") -> str:
+    """Take a screenshot of the current browser page.
+    
+    NOTE: Returns base64 data in JSON. Does NOT save to disk unless save_path is specified.
+    To send the screenshot via Telegram, use telegram_send_file with the save_path.
     
     Args:
-        full_page: Capture full scrollable page
+        full_page: Capture full scrollable page (default: False, viewport only)
+        save_path: Optional file path to save screenshot (e.g. /tmp/screenshot.png)
     
     Returns:
-        JSON with base64-encoded screenshot
+        JSON with screenshot info. If save_path provided, screenshot is also saved to disk.
     """
     import base64
     
@@ -258,12 +262,20 @@ async def browser_screenshot_async(full_page: bool = False) -> str:
     screenshot = await page.screenshot(full_page=full_page)
     b64 = base64.b64encode(screenshot).decode()
     
-    return json.dumps({
+    result = {
         "url": page.url,
         "title": await page.title(),
         "screenshot_base64": b64,
         "size": len(screenshot),
-    }, indent=2)
+    }
+    
+    # Optionally save to disk
+    if save_path:
+        from pathlib import Path
+        Path(save_path).write_bytes(screenshot)
+        result["saved_to"] = save_path
+    
+    return json.dumps(result, indent=2)
 
 
 async def browser_scroll_async(direction: str = "down", amount: int = 500) -> str:

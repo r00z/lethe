@@ -653,14 +653,18 @@ I'll update this as I learn about my principal's current projects and priorities
             """
             raise Exception("Client-side execution required")
         
-        def browser_screenshot(full_page: bool = False) -> str:
-            """Take a screenshot of the current page.
+        def browser_screenshot(full_page: bool = False, save_path: str = "") -> str:
+            """Take a screenshot of the current browser page.
+            
+            NOTE: Returns base64 data in JSON. Does NOT save to disk unless save_path is specified.
+            To send the screenshot via Telegram, use telegram_send_file with the save_path.
             
             Args:
-                full_page: If True, capture entire scrollable page
+                full_page: Capture full scrollable page (default: False, viewport only)
+                save_path: Optional file path to save screenshot (e.g. /tmp/screenshot.png)
             
             Returns:
-                JSON with base64-encoded PNG screenshot
+                JSON with screenshot info. If save_path provided, screenshot is also saved to disk.
             """
             raise Exception("Client-side execution required")
         
