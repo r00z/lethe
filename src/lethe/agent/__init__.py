@@ -358,24 +358,20 @@ I'll update this as I learn about my principal's current projects and priorities
             "grep_search": filesystem.grep_search,
         }
         
-        # Add async browser tools (sync Playwright has threading issues with asyncio)
+        # Add Stagehand browser tools (AI-native, handles modals/shadow DOM/iframes)
         try:
-            from lethe.tools import browser_async
+            from lethe.tools import browser_stagehand
             self._tool_handlers.update({
-                "browser_navigate": browser_async.browser_navigate_async,
-                "browser_get_context": browser_async.browser_get_context_async,
-                "browser_get_text": browser_async.browser_get_text_async,
-                "browser_click": browser_async.browser_click_async,
-                "browser_fill": browser_async.browser_fill_async,
-                "browser_screenshot": browser_async.browser_screenshot_async,
-                "browser_scroll": browser_async.browser_scroll_async,
-                "browser_wait_for": browser_async.browser_wait_for_async,
-                "browser_extract_text": browser_async.browser_extract_text_async,
-                "browser_close": browser_async.browser_close_async,
+                "browser_navigate": browser_stagehand.stagehand_navigate_async,
+                "browser_act": browser_stagehand.stagehand_act_async,
+                "browser_extract": browser_stagehand.stagehand_extract_async,
+                "browser_observe": browser_stagehand.stagehand_observe_async,
+                "browser_screenshot": browser_stagehand.stagehand_screenshot_async,
+                "browser_close": browser_stagehand.stagehand_close_async,
             })
-            logger.info("Async browser tools registered")
+            logger.info("Stagehand browser tools registered")
         except ImportError as e:
-            logger.warning(f"Browser tools not available: {e}")
+            logger.warning(f"Stagehand browser tools not available: {e}")
         
         # Add Telegram tools
         from lethe.tools import telegram_tools
@@ -576,125 +572,97 @@ I'll update this as I learn about my principal's current projects and priorities
             raise Exception("Client-side execution required")
 
         # Browser tools for web automation (sessions auto-create on first use)
-        def browser_navigate(url: str, wait_until: str = "domcontentloaded") -> str:
+        def browser_navigate(url: str) -> str:
             """Navigate the browser to a URL.
             
             Args:
                 url: The URL to navigate to (must include protocol)
-                wait_until: When to consider navigation complete (domcontentloaded, load, networkidle)
             
             Returns:
-                JSON with status code, final URL, and page title
+                JSON with navigation result
             """
             raise Exception("Client-side execution required")
         
-        def browser_get_context(max_elements: int = 100) -> str:
-            """Get interactive elements on the page via accessibility tree.
+        def browser_act(instruction: str) -> str:
+            """Perform an action using natural language.
             
-            Returns what's actually VISIBLE - buttons, links, inputs, headings.
-            Use this to understand what actions are available on the page.
+            This is the most powerful browser tool - describe what you want to do
+            in plain English and the AI will figure out how to do it, even for
+            elements in modals, shadow DOM, or iframes.
+            
+            Examples:
+                - "click the login button"
+                - "fill the email field with user@example.com"
+                - "scroll down to see more content"
+                - "close the cookie consent popup"
+                - "click Accept in the modal dialog"
+                - "select 'United States' from the country dropdown"
             
             Args:
-                max_elements: Maximum number of elements to include (default 100)
+                instruction: Natural language description of the action to perform
             
             Returns:
-                JSON with URL, title, and list of interactive elements with roles and names
+                JSON with action result
             """
             raise Exception("Client-side execution required")
         
-        def browser_get_text(max_length: int = 15000) -> str:
-            """Get all visible text content from the page.
+        def browser_extract(instruction: str, schema: dict = None) -> str:
+            """Extract structured data from the current page using AI.
             
-            Extracts readable text from the accessibility tree - what a screen reader sees.
+            Uses AI to understand the page and extract the requested information.
+            
+            Examples:
+                - "extract the main headline"
+                - "extract all product names and prices"
+                - "get the article text"
+                - "find the author name and publication date"
             
             Args:
-                max_length: Maximum characters to return (default 15000)
+                instruction: What to extract (natural language)
+                schema: Optional JSON schema for structured output
             
             Returns:
-                JSON with URL, title, and visible text content
+                JSON with extracted data
             """
             raise Exception("Client-side execution required")
         
-        def browser_click(selector: str = "", text: str = "") -> str:
-            """Click an element on the page.
+        def browser_observe(instruction: str = "") -> str:
+            """Observe the page and find possible actions.
+            
+            Use this to understand what's on the page and what actions are available.
+            Returns a list of interactive elements with selectors.
+            
+            Examples:
+                - "find the login button"
+                - "find all links in the navigation"
+                - "find the submit button in the modal"
             
             Args:
-                selector: CSS selector (e.g., "button.submit", "#login-btn")
-                text: Text content to find and click (alternative to selector)
+                instruction: Optional hint about what you're looking for
             
             Returns:
-                JSON with success status
+                JSON with list of observed actions/elements
             """
             raise Exception("Client-side execution required")
         
-        def browser_fill(value: str, selector: str = "", label: str = "") -> str:
-            """Fill a text input field.
-            
-            Args:
-                value: Text to enter in the field
-                selector: CSS selector for the input
-                label: Label text to find the input (alternative to selector)
-            
-            Returns:
-                JSON with success status
-            """
-            raise Exception("Client-side execution required")
-        
-        def browser_wait_for(selector: str = "", text: str = "", timeout_seconds: int = 30) -> str:
-            """Wait for an element to appear on the page.
-            
-            Args:
-                selector: CSS selector to wait for
-                text: Text content to wait for (alternative to selector)
-                timeout_seconds: Maximum time to wait (default 30)
-            
-            Returns:
-                JSON with success status
-            """
-            raise Exception("Client-side execution required")
-        
-        def browser_screenshot(full_page: bool = False, save_path: str = "") -> str:
+        def browser_screenshot(full_page: bool = False, save_path: str = "", describe: bool = True) -> str:
             """Take a screenshot of the current browser page.
             
-            NOTE: Returns base64 data in JSON. Does NOT save to disk unless save_path is specified.
-            To send the screenshot via Telegram, use telegram_send_file with the save_path.
+            The screenshot image is automatically shown to you (multimodal).
+            Also includes an AI-generated description of the page content.
             
             Args:
-                full_page: Capture full scrollable page (default: False, viewport only)
-                save_path: Optional file path to save screenshot (e.g. /tmp/screenshot.png)
+                full_page: Capture full scrollable page (default: False)
+                save_path: Optional path to save screenshot (for sending via Telegram)
+                describe: Include AI description of page content (default: True)
             
             Returns:
-                JSON with screenshot info. If save_path provided, screenshot is also saved to disk.
-            """
-            raise Exception("Client-side execution required")
-        
-        def browser_extract_text(selector: str = "") -> str:
-            """Extract text content from the page or a specific element.
-            
-            Args:
-                selector: Optional CSS selector. If empty, extracts all visible text.
-            
-            Returns:
-                JSON with extracted text (truncated to 10k chars if longer)
-            """
-            raise Exception("Client-side execution required")
-        
-        def browser_scroll(direction: str = "down", amount: int = 500) -> str:
-            """Scroll the page.
-            
-            Args:
-                direction: "down", "up", "top", or "bottom"
-                amount: Pixels to scroll for up/down (default 500)
-            
-            Returns:
-                JSON with success status and scroll position info
+                JSON with screenshot info, description, and the image is shown to you
             """
             raise Exception("Client-side execution required")
         
         def browser_close() -> str:
             """Close the browser session and release resources.
-            
-            If using a profile, the auth state is saved automatically.
             
             Returns:
                 JSON with success status and profile save status
@@ -819,16 +787,12 @@ I'll update this as I learn about my principal's current projects and priorities
             list_directory,
             glob_search,
             grep_search,
-            # Browser tools
+            # Browser tools (Stagehand - AI-native, handles modals/shadow DOM)
             browser_navigate,
-            browser_get_context,
-            browser_get_text,
-            browser_click,
-            browser_fill,
-            browser_wait_for,
+            browser_act,
+            browser_extract,
+            browser_observe,
             browser_screenshot,
-            browser_extract_text,
-            browser_scroll,
             browser_close,
             # Telegram tools
             telegram_send_message,
