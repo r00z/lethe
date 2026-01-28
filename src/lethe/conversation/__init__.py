@@ -157,19 +157,12 @@ class ConversationManager:
                 logger.info(f"Chat {chat_id}: Message added to batch (debounce reset)")
                 return True
             
-            # Not processing and not debouncing - start debounce
+            # Not processing and not debouncing - process immediately (no debounce for first message)
             if process_callback:
-                if self.debounce_seconds > 0:
-                    state.is_debouncing = True
-                    state.debounce_task = asyncio.create_task(
-                        self._debounce_and_process(state, process_callback)
-                    )
-                else:
-                    # No debounce - process immediately
-                    state.is_processing = True
-                    state.current_task = asyncio.create_task(
-                        self._process_loop(state, process_callback)
-                    )
+                state.is_processing = True
+                state.current_task = asyncio.create_task(
+                    self._process_loop(state, process_callback)
+                )
             
             return True
     
