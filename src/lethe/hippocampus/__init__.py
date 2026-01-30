@@ -1,13 +1,15 @@
-"""Hippocampus - Eidetic memory retrieval subagent.
+"""Hippocampus - Pattern completion memory retrieval.
 
-The hippocampus agent analyzes incoming messages to determine if recalling
-memories would benefit the conversation. It proactively looks for:
-- References to people, places, projects mentioned before
-- Credentials, configurations, API keys discussed previously
-- Past decisions, patterns, or preferences
-- Any context where prior knowledge would improve the response
+Inspired by biological hippocampus CA3 region which performs autoassociative
+pattern completion: given a partial cue, retrieve the complete memory.
 
-Inspired by the biological hippocampus which consolidates and retrieves memories.
+Key insight: Don't ask "should I recall?" - just DO similarity search on every
+message. Let the similarity threshold filter out irrelevant results. This is
+how biological pattern completion works - automatic activation based on
+similarity, not explicit decision.
+
+Uses conversation context (not just current message) for search, so even
+"do it" or "yes" works when combined with recent dialogue context.
 """
 
 import json
@@ -202,14 +204,17 @@ JSON only:"""
         self,
         main_agent_id: str,
         query: str,
-        max_results: int = 5,
+        max_results: int = 3,
     ) -> str:
         """Search the main agent's archival and conversation memory.
         
+        Uses semantic similarity search - the query should be conversation
+        context, not just keywords.
+        
         Args:
             main_agent_id: The main agent's ID to search
-            query: Search query
-            max_results: Maximum results to return
+            query: Search context (recent messages + new message)
+            max_results: Maximum results to return per source
             
         Returns:
             Formatted string with search results, or empty string if none found
@@ -217,7 +222,7 @@ JSON only:"""
         results = []
         
         try:
-            # Search archival memory (passages)
+            # Search archival memory (passages) - semantic search
             archival_results = await self.client.agents.passages.search(
                 agent_id=main_agent_id,
                 query=query,
@@ -233,20 +238,29 @@ JSON only:"""
                 passages = list(archival_results)
             
             for passage in passages[:max_results]:
-                # Handle different response types
+                # Check similarity score if available
+                score = getattr(passage, 'score', None)
+                if score is not None and score < 0.5:
+                    continue  # Skip low-relevance results
+                
                 if hasattr(passage, 'content'):
                     content = passage.content
                 elif isinstance(passage, tuple) and len(passage) > 0:
                     content = str(passage[0])
                 else:
                     content = str(passage)
+                
+                # Skip very short or empty results
+                if len(content.strip()) < 20:
+                    continue
+                    
                 results.append(f"[Archival] {content}")
                     
         except Exception as e:
             logger.warning(f"Archival search failed: {e}")
 
         try:
-            # Search conversation history using organization-wide search with agent filter
+            # Search conversation history - hybrid search (text + semantic)
             conv_results = await self.client.messages.search(
                 query=query,
                 agent_id=main_agent_id,
@@ -262,7 +276,6 @@ JSON only:"""
                 messages = list(conv_results)
             
             for msg in messages[:max_results]:
-                # Handle different message types (some don't have 'content')
                 if hasattr(msg, 'content'):
                     content = msg.content if isinstance(msg.content, str) else str(msg.content)
                 elif hasattr(msg, 'reasoning'):
@@ -271,6 +284,11 @@ JSON only:"""
                     content = msg.text
                 else:
                     content = str(msg)
+                
+                # Skip very short results
+                if len(content.strip()) < 20:
+                    continue
+                    
                 role = getattr(msg, 'message_type', 'message').replace('_message', '')
                 results.append(f"[{role}] {content}")
                     
@@ -284,7 +302,7 @@ JSON only:"""
         
         # If results are too long, compress via hippocampus
         if len(combined) > 3000:
-            combined = await self._compress_memories(combined, query)
+            combined = await self._compress_memories(combined, query[:200])
             
         return combined
 
@@ -340,14 +358,18 @@ SUMMARY (be concise but preserve key details):"""
         new_message: str,
         recent_messages: list[dict],
     ) -> str:
-        """Analyze message and augment with relevant memories if beneficial.
+        """Pattern completion: automatically recall relevant memories.
         
-        This is the main entry point - call this before sending to the main agent.
+        Like biological hippocampus CA3 - given context, retrieve related memories
+        automatically via similarity search. No explicit "should I recall?" decision.
+        
+        Uses recent conversation context + new message as search query, so even
+        short messages like "do it" work when combined with preceding context.
         
         Args:
             main_agent_id: The main agent's ID (for memory search)
             new_message: The new user message
-            recent_messages: Recent conversation messages
+            recent_messages: Recent conversation messages for context
             
         Returns:
             The message, potentially augmented with recalled memories
@@ -355,29 +377,41 @@ SUMMARY (be concise but preserve key details):"""
         if not self.enabled:
             return new_message
 
-        # Analyze if memory recall would be beneficial
-        analysis = await self.analyze_for_recall(new_message, recent_messages)
+        # Build search context from recent messages + new message
+        # This enables pattern completion even for short messages like "yes" or "do it"
+        context_parts = []
+        for msg in recent_messages[-5:]:  # Last 5 messages for context
+            content = msg.get("content", "")
+            if isinstance(content, list):
+                content = " ".join(
+                    part.get("text", "") for part in content 
+                    if isinstance(part, dict) and part.get("type") == "text"
+                )
+            if content:
+                # Truncate very long messages to keep search focused
+                if len(content) > 300:
+                    content = content[:300]
+                context_parts.append(content)
+        context_parts.append(new_message)
         
-        if not analysis or not analysis.get("should_recall") or not analysis.get("search_query"):
-            return new_message
-
-        # Search memories
-        query = analysis["search_query"]
-        memories = await self.search_memories(main_agent_id, query)
+        # Use full context as search query (pattern completion input)
+        search_context = "\n".join(context_parts)
+        
+        # Search memories using semantic similarity
+        memories = await self.search_memories(main_agent_id, search_context)
         
         if not memories:
             return new_message
 
-        # Augment the message with recalled memories (append AFTER the user message)
-        reason = analysis.get("reason", "potentially relevant context")
+        # Augment the message with recalled memories
         augmented = f"""{new_message}
 
 ---
-[Memory recall: {reason}]
+[Memory recall]
 {memories}
 [End of recall]"""
         
-        logger.info(f"Augmented message with memory recall ({len(memories)} chars): {reason}")
+        logger.info(f"Pattern completion: augmented with {len(memories)} chars of recalled memories")
         return augmented
 
     async def judge_response(
