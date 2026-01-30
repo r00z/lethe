@@ -1306,7 +1306,8 @@ I'll update this as I learn about my principal's current projects and priorities
                 continue
             
             # Use hippocampus to judge response and decide next steps
-            if stop_reason == "end_turn":
+            # Skip for system messages (heartbeats) - they don't need judging
+            if stop_reason == "end_turn" and not is_system_message:
                 original_request = context.get("_original_request", message) if context else message
                 
                 # Ask hippocampus to judge this response
@@ -1332,6 +1333,15 @@ I'll update this as I learn about my principal's current projects and priorities
                     logger.info(f"Hippocampus says continue ({continuation_count}/{max_continuations})")
                     messages = [{"role": "user", "content": "[SYSTEM] Continue."}]
                     continue
+            elif stop_reason == "end_turn" and is_system_message:
+                # For system messages, just send the response without judging
+                if current_iteration_has_response:
+                    result_parts.append(current_iteration_response)
+                    if on_message:
+                        try:
+                            await on_message(current_iteration_response)
+                        except Exception as e:
+                            logger.warning(f"on_message callback failed: {e}")
             
             logger.info(f"Exiting loop: stop_reason={stop_reason}, continuations={continuation_count}")
             break
