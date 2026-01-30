@@ -1421,44 +1421,14 @@ I'll update this as I learn about my principal's current projects and priorities
                 
                 continue
             
-            # Use hippocampus to judge response and decide next steps
-            # DISABLED: The judge LLM keeps hallucinating reasons to continue even when
-            # agent explicitly says "nothing to continue". Agent decides for itself.
-            if False and stop_reason == "end_turn" and not is_system_message:
-                original_request = context.get("_original_request", message) if context else message
-                
-                # Ask hippocampus to judge this response
-                judgment = await self.hippocampus.judge_response(
-                    original_request=original_request,
-                    agent_response=current_iteration_response,
-                    iteration=iteration,
-                    is_continuation=(continuation_count > 0),
-                )
-                
-                # Send to user if hippocampus approves
-                if judgment["send_to_user"] and current_iteration_has_response:
-                    result_parts.append(current_iteration_response)
-                    if on_message:
-                        try:
-                            await on_message(current_iteration_response)
-                        except Exception as e:
-                            logger.warning(f"on_message callback failed: {e}")
-                
-                # Continue if hippocampus says so and we haven't hit limit
-                if judgment["continue_task"] and continuation_count < max_continuations:
-                    continuation_count += 1
-                    logger.info(f"Hippocampus says continue ({continuation_count}/{max_continuations})")
-                    messages = [{"role": "user", "content": "[SYSTEM] Continue."}]
-                    continue
-            elif stop_reason == "end_turn" and is_system_message:
-                # For system messages, just send the response without judging
-                if current_iteration_has_response:
-                    result_parts.append(current_iteration_response)
-                    if on_message:
-                        try:
-                            await on_message(current_iteration_response)
-                        except Exception as e:
-                            logger.warning(f"on_message callback failed: {e}")
+            # Send response to user (no judging - agent decides for itself)
+            if stop_reason == "end_turn" and current_iteration_has_response:
+                result_parts.append(current_iteration_response)
+                if on_message:
+                    try:
+                        await on_message(current_iteration_response)
+                    except Exception as e:
+                        logger.warning(f"on_message callback failed: {e}")
             
             logger.info(f"Exiting loop: stop_reason={stop_reason}, continuations={continuation_count}")
             break
