@@ -150,28 +150,39 @@ install_native() {
     fi
     success "git found"
     
-    if ! check_command python3; then
-        error "Python 3 is required. Please install Python 3.11+."
-    fi
-    
-    PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-    if [ "$(echo "$PYTHON_VERSION < 3.11" | bc -l 2>/dev/null || echo 1)" = "1" ]; then
-        # bc might not exist, try another way
-        MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
-        MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
-        if [ "$MAJOR" -lt 3 ] || ([ "$MAJOR" -eq 3 ] && [ "$MINOR" -lt 11 ]); then
-            error "Python 3.11+ is required. Found: $PYTHON_VERSION"
-        fi
-    fi
-    success "Python $PYTHON_VERSION found"
-    
-    # Install uv if needed
+    # Install uv if needed (uv can manage Python versions)
     if ! check_command uv; then
         info "Installing uv (Python package manager)..."
         curl -LsSf https://astral.sh/uv/install.sh | sh
         export PATH="$HOME/.local/bin:$PATH"
+        # Verify installation
+        if ! check_command uv; then
+            export PATH="$HOME/.cargo/bin:$PATH"  # Alternative location
+        fi
     fi
     success "uv found"
+    
+    # Check Python version, install via uv if needed
+    NEED_PYTHON=false
+    if ! check_command python3; then
+        NEED_PYTHON=true
+    else
+        PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+        MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
+        MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
+        if [ "$MAJOR" -lt 3 ] || ([ "$MAJOR" -eq 3 ] && [ "$MINOR" -lt 11 ]); then
+            NEED_PYTHON=true
+            info "Python $PYTHON_VERSION found, but 3.11+ required"
+        fi
+    fi
+    
+    if [ "$NEED_PYTHON" = true ]; then
+        info "Installing Python 3.12 via uv..."
+        uv python install 3.12
+        success "Python 3.12 installed"
+    else
+        success "Python $PYTHON_VERSION found"
+    fi
     
     # Clone or update repo
     if [ -d "$INSTALL_DIR" ]; then
