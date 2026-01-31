@@ -345,7 +345,12 @@ EOF
         echo "  cd $INSTALL_DIR && uv run lethe"
     fi
     echo ""
-    echo "Now message your bot on Telegram!"
+    echo -e "${GREEN}Next step:${NC} Open Telegram and message your bot!"
+    echo ""
+    echo "Try saying:"
+    echo "  \"Hello! What can you do?\""
+    echo "  \"Remember that my favorite color is blue\""
+    echo "  \"What's my favorite color?\""
 }
 
 setup_systemd() {
@@ -526,7 +531,12 @@ EOF
     echo "  ~/lethe/workspace - Put files here for the agent to access"
     echo "  ~/lethe/data      - Databases (managed by Lethe)"
     echo ""
-    echo "The container does NOT have access to the rest of your home directory."
+    echo -e "${GREEN}Next step:${NC} Open Telegram and message your bot!"
+    echo ""
+    echo "Try saying:"
+    echo "  \"Hello! What can you do?\""
+    echo "  \"Remember that my favorite color is blue\""
+    echo "  \"What's my favorite color?\""
 }
 
 # Main
