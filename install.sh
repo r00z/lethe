@@ -307,23 +307,43 @@ EOF
     success "Configuration saved"
     
     # Set up service based on OS
+    SERVICE_SETUP=false
     case $OS in
         linux|wsl)
-            setup_systemd
+            if check_command systemctl; then
+                setup_systemd
+                SERVICE_SETUP=true
+            else
+                warn "systemd not available - skipping service setup"
+            fi
             ;;
         mac)
             setup_launchd
+            SERVICE_SETUP=true
             ;;
     esac
     
     echo ""
     success "Lethe installed successfully!"
     echo ""
-    echo "Commands:"
-    echo "  Start:   systemctl --user start lethe"
-    echo "  Stop:    systemctl --user stop lethe"
-    echo "  Logs:    journalctl --user -u lethe -f"
-    echo "  Status:  systemctl --user status lethe"
+    
+    if [ "$SERVICE_SETUP" = true ]; then
+        if [ "$OS" = "mac" ]; then
+            echo "Commands:"
+            echo "  Start:   launchctl start com.lethe.agent"
+            echo "  Stop:    launchctl stop com.lethe.agent"
+            echo "  Logs:    tail -f ~/Library/Logs/lethe.log"
+        else
+            echo "Commands:"
+            echo "  Start:   systemctl --user start lethe"
+            echo "  Stop:    systemctl --user stop lethe"
+            echo "  Logs:    journalctl --user -u lethe -f"
+            echo "  Status:  systemctl --user status lethe"
+        fi
+    else
+        echo "To run Lethe manually:"
+        echo "  cd $INSTALL_DIR && uv run lethe"
+    fi
     echo ""
     echo "Now message your bot on Telegram!"
 }
