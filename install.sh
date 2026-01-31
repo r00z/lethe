@@ -197,6 +197,41 @@ detect_container_runtime() {
     fi
 }
 
+install_agent_browser() {
+    # Check if already installed
+    if check_command agent-browser; then
+        success "agent-browser found"
+        return 0
+    fi
+    
+    info "Installing agent-browser (browser automation)..."
+    
+    # Need npm
+    if ! check_command npm; then
+        OS=$(detect_os)
+        if [[ "$OS" == "mac" ]]; then
+            install_homebrew
+            brew install node
+        elif [[ "$OS" == "linux" ]] || [[ "$OS" == "wsl" ]]; then
+            if check_command apt-get; then
+                maybe_sudo apt-get update -y
+                maybe_sudo apt-get install -y nodejs npm
+            elif check_command dnf; then
+                maybe_sudo dnf install -y nodejs npm
+            elif check_command pacman; then
+                maybe_sudo pacman -S --noconfirm nodejs npm
+            else
+                warn "Could not install npm - please install Node.js manually"
+                return 1
+            fi
+        fi
+    fi
+    
+    # Install agent-browser globally
+    npm install -g agent-browser
+    success "agent-browser installed"
+}
+
 prompt_tokens() {
     echo ""
     echo -e "${YELLOW}Lethe needs a few things to get started:${NC}"
@@ -290,6 +325,9 @@ install_native() {
     cd "$INSTALL_DIR"
     uv sync
     success "Dependencies installed"
+    
+    # Install agent-browser for browser automation
+    install_agent_browser
     
     # Create config directory
     mkdir -p "$CONFIG_DIR"
@@ -472,14 +510,17 @@ EOF
         cat > "$INSTALL_DIR/Dockerfile" << 'EOF'
 FROM python:3.12-slim
 
-# Install system deps
+# Install system deps including Node.js for agent-browser
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git curl && \
+    git curl nodejs npm && \
     rm -rf /var/lib/apt/lists/*
 
 # Install uv
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:$PATH"
+
+# Install agent-browser for browser automation
+RUN npm install -g agent-browser
 
 WORKDIR /app
 

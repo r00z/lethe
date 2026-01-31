@@ -3,15 +3,20 @@
 
 FROM python:3.12-slim
 
-# Install system deps
+# Install system deps including Node.js for agent-browser
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
+    nodejs \
+    npm \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:$PATH"
+
+# Install agent-browser for browser automation
+RUN npm install -g agent-browser
 
 WORKDIR /app
 
