@@ -50,14 +50,16 @@ class TestReadFile:
                 f.write(f"line {i}\n")
             f.flush()
             
-            result = read_file(f.name, offset=2, limit=3)
+            # offset is 1-indexed, so offset=3 starts at line 3 (which contains "line 2")
+            result = read_file(f.name, offset=3, limit=3)
             
-            # Should have lines 3-5 (0-indexed offset of 2, limit of 3)
+            # Should have lines 3-5 (1-indexed offset of 3, limit of 3)
             assert "line 2" in result
             assert "line 3" in result
             assert "line 4" in result
             # Should not have line 0, 1, or 5+
-            assert "line 0\n" not in result
+            assert "line 0" not in result
+            assert "line 1" not in result
             assert "line 5" not in result
             
             os.unlink(f.name)

@@ -1,5 +1,13 @@
 """Filesystem tools for the agent."""
 
+from lethe.tools.truncate import (
+    truncate_head,
+    format_truncation_notice,
+    format_size,
+    DEFAULT_MAX_LINES,
+    DEFAULT_MAX_BYTES,
+)
+
 
 def _is_tool(func):
     """Decorator to mark a function as a Letta tool."""
@@ -8,13 +16,16 @@ def _is_tool(func):
 
 
 @_is_tool
-def read_file(file_path: str, offset: int = 0, limit: int = 2000) -> str:
+def read_file(file_path: str, offset: int = 0, limit: int = 0) -> str:
     """Read a file from the filesystem.
+    
+    Output is truncated to first 2000 lines or 50KB (whichever is hit first).
+    Use offset to continue reading large files.
 
     Args:
         file_path: Absolute path to the file to read
-        offset: Line number to start reading from (0-indexed)
-        limit: Maximum number of lines to read
+        offset: Line number to start reading from (1-indexed, default: start of file)
+        limit: Maximum number of lines to read (0 = use default truncation)
 
     Returns:
         File contents with line numbers, or error message
@@ -29,19 +40,45 @@ def read_file(file_path: str, offset: int = 0, limit: int = 2000) -> str:
             return f"Error: Not a file: {file_path}"
 
         with open(path, "r", encoding="utf-8", errors="replace") as f:
-            lines = f.readlines()
+            all_lines = f.readlines()
 
-        total_lines = len(lines)
-        selected = lines[offset : offset + limit]
+        total_lines = len(all_lines)
+        
+        # Convert 1-indexed offset to 0-indexed
+        start_idx = max(0, offset - 1) if offset > 0 else 0
+        
+        if start_idx >= total_lines:
+            return f"Error: Offset {offset} is beyond end of file ({total_lines} lines total)"
+        
+        # Apply user limit if specified, otherwise let truncation handle it
+        if limit > 0:
+            selected = all_lines[start_idx:start_idx + limit]
+        else:
+            selected = all_lines[start_idx:]
+        
+        # Join and apply truncation
+        content = ''.join(selected)
+        result = truncate_head(content)
+        
+        # Build output with line numbers
+        output_lines = result.content.split('\n')
+        numbered_lines = []
+        for i, line in enumerate(output_lines, start=start_idx + 1):
+            numbered_lines.append(f"{i:6d}\t{line}")
+        
+        output = '\n'.join(numbered_lines)
+        
+        # Add truncation notice if needed
+        if result.truncated:
+            notice = format_truncation_notice(result, start_line=start_idx + 1)
+            output += f"\n\n{notice}"
+        elif limit > 0 and start_idx + limit < total_lines:
+            # User specified limit, more content available
+            remaining = total_lines - (start_idx + limit)
+            next_offset = start_idx + limit + 1
+            output += f"\n\n[{remaining} more lines in file. Use offset={next_offset} to continue.]"
 
-        result = []
-        for i, line in enumerate(selected, start=offset + 1):
-            if len(line) > 500:
-                line = line[:10000] + "... [truncated]\n"
-            result.append(f"{i:6d}\t{line.rstrip()}")
-
-        header = f"File: {path} (lines {offset + 1}-{offset + len(selected)} of {total_lines})"
-        return header + "\n" + "\n".join(result)
+        return output
 
     except Exception as e:
         return f"Error reading file: {e}"
@@ -202,6 +239,8 @@ def glob_search(pattern: str, path: str = ".") -> str:
 @_is_tool
 def grep_search(pattern: str, path: str = ".", file_pattern: str = "*") -> str:
     """Search for a regex pattern in files.
+    
+    Returns up to 200 matches. Individual lines truncated to 500 chars.
 
     Args:
         pattern: Regex pattern to search for
@@ -213,6 +252,7 @@ def grep_search(pattern: str, path: str = ".", file_pattern: str = "*") -> str:
     """
     import re
     from pathlib import Path
+    from lethe.tools.truncate import truncate_line
     
     try:
         base_path = Path(path).expanduser().resolve()
@@ -221,6 +261,7 @@ def grep_search(pattern: str, path: str = ".", file_pattern: str = "*") -> str:
         results = []
         files_searched = 0
         matches_found = 0
+        lines_truncated = 0
 
         for file_path in base_path.rglob(file_pattern):
             if not file_path.is_file():
@@ -235,7 +276,11 @@ def grep_search(pattern: str, path: str = ".", file_pattern: str = "*") -> str:
                     for line_num, line in enumerate(f, 1):
                         if regex.search(line):
                             rel_path = file_path.relative_to(base_path) if file_path.is_relative_to(base_path) else file_path
-                            results.append(f"{rel_path}:{line_num}: {line.rstrip()}")
+                            # Truncate long lines
+                            truncated_line, was_truncated = truncate_line(line.rstrip())
+                            if was_truncated:
+                                lines_truncated += 1
+                            results.append(f"{rel_path}:{line_num}: {truncated_line}")
                             matches_found += 1
 
                             if matches_found >= 200:
@@ -249,6 +294,8 @@ def grep_search(pattern: str, path: str = ".", file_pattern: str = "*") -> str:
         header = f"Found {matches_found} matches in {files_searched} files"
         if matches_found >= 200:
             header += " (limit reached)"
+        if lines_truncated > 0:
+            header += f" ({lines_truncated} lines truncated to 500 chars)"
 
         return header + "\n" + "\n".join(results) if results else f"No matches for '{pattern}' in {base_path}"
 

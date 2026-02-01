@@ -23,16 +23,27 @@ from lethe.tools.process_manager import (
 )
 
 # Limits
-MAX_OUTPUT_CHARS = 30000
 DEFAULT_TIMEOUT = 120  # 2 minutes
 MAX_TIMEOUT = 600  # 10 minutes
 
+from lethe.tools.truncate import (
+    truncate_tail,
+    format_truncation_notice,
+    format_size,
+    DEFAULT_MAX_LINES,
+    DEFAULT_MAX_BYTES,
+)
 
-def _truncate_output(output: str, limit: int = MAX_OUTPUT_CHARS) -> str:
-    """Truncate output if it exceeds the limit."""
-    if len(output) <= limit:
-        return output
-    return output[:limit] + f"\n\n... [output truncated, {limit} char limit]"
+
+def _truncate_output(output: str) -> str:
+    """Truncate bash output from tail (keep end where errors/results are)."""
+    result = truncate_tail(output)
+    if not result.truncated:
+        return result.content
+    
+    # Build output with truncation notice
+    notice = format_truncation_notice(result, start_line=result.total_lines - result.output_lines + 1)
+    return f"{result.content}\n\n{notice}"
 
 
 def _is_tool(func):
@@ -49,7 +60,10 @@ def bash(
     run_in_background: bool = False,
     use_pty: bool = False,
 ) -> str:
-    """Execute a bash command in the shell.
+    """Execute a bash command in the current working directory.
+    
+    Output is truncated to last 2000 lines or 50KB (whichever is hit first).
+    Truncation keeps the END of output where errors and results typically are.
     
     Args:
         command: The shell command to execute
@@ -59,7 +73,7 @@ def bash(
         use_pty: If True, run in a pseudo-terminal (needed for TUI apps like htop, vim)
     
     Returns:
-        Command output, error message, or background process ID
+        Command output (stdout + stderr), error message, or background process ID
     """
     # Special command to list background processes
     if command == "/bg":
