@@ -103,6 +103,20 @@ class ContextWindow:
         self.messages.append(message)
         self._compress_if_needed()
     
+    def load_messages(self, messages: List[dict]):
+        """Load existing messages from history (e.g., from database).
+        
+        Args:
+            messages: List of dicts with 'role' and 'content' keys
+        """
+        for msg in messages:
+            self.messages.append(Message(
+                role=msg.get("role", "user"),
+                content=msg.get("content", ""),
+            ))
+        # Compress if needed after loading
+        self._compress_if_needed()
+    
     def _compress_if_needed(self):
         """Summarize oldest messages if context is too full."""
         available = self.get_available_tokens()
@@ -475,6 +489,14 @@ class AsyncLLMClient:
     def update_memory_context(self, memory_context: str):
         """Update the memory context."""
         self.context.memory_context = memory_context
+    
+    def load_messages(self, messages: List[dict]):
+        """Load existing messages from history into context.
+        
+        Args:
+            messages: List of dicts with 'role' and 'content' keys
+        """
+        self.context.load_messages(messages)
     
     async def chat(
         self,

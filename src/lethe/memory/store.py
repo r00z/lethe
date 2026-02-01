@@ -45,28 +45,84 @@ class MemoryStore:
     def get_context_for_prompt(self, max_tokens: int = 8000) -> str:
         """Get formatted memory context for LLM prompt.
         
+        Matches Letta's context engineering format:
+        - Memory blocks with description, metadata, value
+        - Memory metadata with timestamps and counts
+        
         Args:
             max_tokens: Approximate max tokens for context
             
         Returns:
             Formatted string with all memory blocks
         """
+        from datetime import datetime, timezone
+        
         sections = []
         
-        # Add memory blocks
+        # Build memory blocks section (Letta-style)
         blocks = self.blocks.list_blocks()
-        for block in blocks:
-            if block.get("hidden"):
-                continue
-            label = block["label"]
-            value = block["value"]
-            description = block.get("description", "")
+        if blocks:
+            block_lines = ["<memory_blocks>"]
+            block_lines.append("The following memory blocks are currently engaged in your core memory unit:\n")
             
-            section = f"<{label}>\n"
-            if description:
-                section += f"<description>{description}</description>\n"
-            section += f"{value}\n</{label}>"
-            sections.append(section)
+            for i, block in enumerate(blocks):
+                if block.get("hidden"):
+                    continue
+                    
+                label = block["label"]
+                value = block["value"] or ""
+                description = block.get("description", "")
+                limit = block.get("limit", 20000)
+                
+                block_lines.append(f"<{label}>")
+                block_lines.append("<description>")
+                block_lines.append(description)
+                block_lines.append("</description>")
+                block_lines.append("<metadata>")
+                block_lines.append(f"- chars_current={len(value)}")
+                block_lines.append(f"- chars_limit={limit}")
+                block_lines.append("</metadata>")
+                block_lines.append("<warning>")
+                block_lines.append("# NOTE: Line numbers shown below (with arrows like '1→') are to help during editing. Do NOT include line number prefixes in your memory edit tool calls.")
+                block_lines.append("</warning>")
+                block_lines.append("<value>")
+                # Add line numbers like Letta does for Anthropic
+                for line_num, line in enumerate(value.split("\n"), 1):
+                    block_lines.append(f"{line_num}→ {line}")
+                block_lines.append("</value>")
+                block_lines.append(f"</{label}>")
+                
+                if i < len(blocks) - 1:
+                    block_lines.append("")
+            
+            block_lines.append("\n</memory_blocks>")
+            sections.append("\n".join(block_lines))
+        
+        # Build memory metadata section
+        now = datetime.now(timezone.utc)
+        message_count = self.messages.count()
+        archival_count = self.archival.count()
+        
+        # Get last modified time from blocks
+        last_modified = now  # Default to now
+        for block in blocks:
+            if block.get("updated_at"):
+                block_time = datetime.fromisoformat(block["updated_at"].replace("Z", "+00:00"))
+                if block_time > last_modified:
+                    last_modified = block_time
+        
+        metadata_lines = [
+            "<memory_metadata>",
+            f"- The current system date is: {now.strftime('%B %d, %Y')}",
+            f"- Memory blocks were last modified: {last_modified.strftime('%Y-%m-%d %I:%M:%S %p')} UTC{last_modified.strftime('%z')}",
+            f"- {message_count} previous messages between you and the user are stored in recall memory (use tools to access them)",
+        ]
+        
+        if archival_count > 0:
+            metadata_lines.append(f"- {archival_count} total memories you created are stored in archival memory (use tools to access them)")
+        
+        metadata_lines.append("</memory_metadata>")
+        sections.append("\n".join(metadata_lines))
         
         return "\n\n".join(sections)
     

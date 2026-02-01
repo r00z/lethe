@@ -56,7 +56,22 @@ class Agent:
         # Add external tools (file, bash, browser)
         self.llm.add_tools(get_all_tools())
         
+        # Load recent message history into context
+        self._load_message_history()
+        
         logger.info(f"Agent initialized with model {self.settings.llm_model}")
+    
+    def _load_message_history(self, max_messages: int = 50):
+        """Load recent message history into LLM context.
+        
+        This gives the agent context from previous conversations.
+        """
+        recent = self.memory.messages.get_recent(max_messages)
+        if recent:
+            # Reverse to get chronological order (oldest first)
+            recent = list(reversed(recent))
+            self.llm.load_messages(recent)
+            logger.info(f"Loaded {len(recent)} messages from history")
     
     def _build_system_prompt(self) -> str:
         """Build system prompt from config files."""
