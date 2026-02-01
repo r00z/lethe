@@ -125,8 +125,13 @@ async def run():
     finally:
         console.print("\n[yellow]Shutting down...[/yellow]")
         
-        await telegram_bot.stop()
-        await agent.close()
+        # Shutdown with timeout to avoid hanging
+        try:
+            async with asyncio.timeout(5):
+                await telegram_bot.stop()
+                await agent.close()
+        except asyncio.TimeoutError:
+            logger.warning("Shutdown timed out, forcing exit")
         
         bot_task.cancel()
         try:
