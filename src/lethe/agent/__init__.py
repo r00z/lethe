@@ -233,9 +233,12 @@ class Agent:
     def initialize_default_blocks(self):
         """Initialize default memory blocks if they don't exist."""
         defaults = [
-            ("persona", "Who I am and how I behave", "I am Lethe, an autonomous AI assistant."),
-            ("human", "Information about my human", ""),
-            ("project", "Current project context", ""),
+            ("persona", "Who I am and how I communicate. I evolve this as I develop my style.", 
+             "I am Lethe, an autonomous AI assistant. I communicate naturally and adapt to my user."),
+            ("human", "What I've learned about my human - their preferences, communication style, what matters to them. I update this to serve them better.", 
+             ""),
+            ("project", "Current project context and what we're working on together.", 
+             ""),
         ]
         
         for label, description, default_value in defaults:
