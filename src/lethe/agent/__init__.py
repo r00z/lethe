@@ -1171,23 +1171,35 @@ I'll update this as I learn about my principal's current projects and priorities
         import json
         
         for attempt in range(max_retries):
-            # Get the pending approval from agent state
-            agent = await self.client.agents.retrieve(agent_id)
-            message_ids = getattr(agent, "message_ids", None) or []
+            # Try to get pending_request_id from error message first (most reliable)
+            pending_msg = None
+            if error_str:
+                match = re.search(r"'pending_request_id':\s*'(message-[a-f0-9-]+)'", error_str)
+                if match:
+                    pending_request_id = match.group(1)
+                    logger.info(f"Fetching pending approval: {pending_request_id}")
+                    try:
+                        pending_msg = await self.client.messages.retrieve(pending_request_id)
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch pending message: {e}")
             
-            if not message_ids:
-                logger.warning("No message_ids found, cannot recover")
-                break
+            # Fallback to message_ids[-1]
+            if not pending_msg:
+                agent = await self.client.agents.retrieve(agent_id)
+                message_ids = getattr(agent, "message_ids", None) or []
+                
+                if not message_ids:
+                    logger.warning("No message_ids found, cannot recover")
+                    break
+                
+                pending_msg = await self.client.messages.retrieve(message_ids[-1])
             
-            # Get the last message (should be approval_request_message)
-            last_msg = await self.client.messages.retrieve(message_ids[-1])
-            
-            if getattr(last_msg, "message_type", None) != "approval_request_message":
-                logger.info(f"No pending approval (last message type: {getattr(last_msg, 'message_type', 'unknown')})")
+            if getattr(pending_msg, "message_type", None) != "approval_request_message":
+                logger.info(f"No pending approval (message type: {getattr(pending_msg, 'message_type', 'unknown')})")
                 break
             
             # Get tool call details
-            tool_call = getattr(last_msg, "tool_call", None)
+            tool_call = getattr(pending_msg, "tool_call", None)
             if not tool_call:
                 logger.warning("Approval request has no tool_call")
                 break
