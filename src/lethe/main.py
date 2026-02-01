@@ -72,13 +72,18 @@ async def run():
         await telegram_bot.start_typing(chat_id)
         
         try:
-            # Callback for intermediate messages (tool reasoning, updates)
+            # Callback for intermediate messages (reasoning, tool calls)
             async def on_intermediate(content: str):
                 """Send intermediate updates while agent is working."""
-                if content and len(content) > 20:
-                    # Check for interrupt before sending
-                    if interrupt_check():
-                        return
+                if not content or len(content) < 10:
+                    return
+                # Check for interrupt before sending
+                if interrupt_check():
+                    return
+                # Content already has emoji prefix from LLM client (💭 or 🔧)
+                if content.startswith("🔧"):
+                    await telegram_bot.send_message(chat_id, content)
+                else:
                     await telegram_bot.send_message(chat_id, f"💭 {content}")
             
             # Get response from agent
