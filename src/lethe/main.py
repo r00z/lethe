@@ -130,8 +130,8 @@ async def run():
     heartbeat_chat_id = int(allowed_ids.split(",")[0]) if allowed_ids else None
     
     async def heartbeat_process(message: str) -> str:
-        """Process heartbeat through agent."""
-        return await agent.chat(message)
+        """Process heartbeat through agent (no hippocampus recall)."""
+        return await agent.chat(message, use_hippocampus=False)
     
     async def heartbeat_send(response: str):
         """Send heartbeat response to user."""

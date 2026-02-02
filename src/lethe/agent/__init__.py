@@ -226,6 +226,7 @@ class Agent:
         message: str,
         on_message: Optional[Callable[[str], Any]] = None,
         on_image: Optional[Callable[[str], Any]] = None,
+        use_hippocampus: bool = True,
     ) -> str:
         """Send a message and get a response.
         
@@ -233,6 +234,7 @@ class Agent:
             message: User message
             on_message: Optional callback for intermediate messages
             on_image: Optional callback for image attachments (screenshots)
+            use_hippocampus: Whether to augment with recalled memories (default True)
             
         Returns:
             Final assistant response
@@ -240,9 +242,12 @@ class Agent:
         # Store user message in history (original, without recall)
         self.memory.messages.add("user", message)
         
-        # Augment message with hippocampus recall
-        recent = self.memory.messages.get_recent(10)
-        augmented_message = await self.hippocampus.augment_message(message, recent)
+        # Augment message with hippocampus recall (unless disabled)
+        if use_hippocampus:
+            recent = self.memory.messages.get_recent(10)
+            augmented_message = await self.hippocampus.augment_message(message, recent)
+        else:
+            augmented_message = message
         
         # Get response from LLM (handles tool calls internally)
         response = await self.llm.chat(augmented_message, on_message=on_message, on_image=on_image)
