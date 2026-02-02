@@ -57,24 +57,6 @@ async def run():
     console.print(f"Memory: {settings.memory_dir}")
     console.print()
     
-    # Check if Claude Max is configured - requires Claude Code CLI authentication
-    provider = os.environ.get("LLM_PROVIDER", "").lower()
-    
-    if provider == "claude-max":
-        from lethe.oauth import ClaudeOAuth
-        oauth_instance = ClaudeOAuth()
-        if not oauth_instance.has_valid_tokens():
-            console.print("[red]Claude Max requires Claude Code CLI to be authenticated![/red]")
-            console.print("\nPlease run:")
-            console.print("  [cyan]claude login[/cyan]")
-            console.print("\nThen restart Lethe.")
-            sys.exit(1)
-        
-        console.print("[green]Using Claude Max subscription (via Claude Code CLI)[/green]")
-        # Store oauth instance for agent to use
-        import lethe.agent as agent_module
-        agent_module._oauth_instance = oauth_instance
-
     # Initialize agent (tools auto-loaded)
     console.print("[dim]Initializing agent...[/dim]")
     agent = Agent(settings)

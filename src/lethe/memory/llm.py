@@ -68,14 +68,8 @@ PROVIDERS = {
         "default_model": "gpt-5.2",  # GPT-5.2
         "uses_oauth": False,
     },
-    # Uses tokens from Claude Code CLI (~/.claude/.credentials.json)
-    "claude-max": {
-        "env_key": None,  # Uses OAuth tokens from Claude Code CLI
-        "model_prefix": "anthropic/",
-        "default_model": "anthropic/claude-opus-4-5-20251101",  # Claude Opus 4.5
-        "uses_oauth": True,
-        "api_base": "https://api.anthropic.com",
-    },
+    # NOTE: claude-max disabled - Anthropic blocked third-party OAuth in Jan 2026
+    # Use "anthropic" provider with API key instead
 }
 
 DEFAULT_PROVIDER = "openrouter"

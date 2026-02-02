@@ -39,29 +39,26 @@ WORKSPACE_DIR="${LETHE_WORKSPACE_DIR:-$HOME/lethe}"
 INSTALL_MODE="container"
 
 # Provider defaults
+# NOTE: claude-max disabled - Anthropic blocked third-party OAuth in Jan 2026
 declare -A PROVIDERS=(
     ["openrouter"]="OpenRouter (recommended - access to all models)"
     ["anthropic"]="Anthropic API (Claude models with API key)"
     ["openai"]="OpenAI (GPT models)"
-    ["claude-max"]="Claude Max (uses Claude Code CLI authentication)"
 )
 declare -A PROVIDER_KEYS=(
     ["openrouter"]="OPENROUTER_API_KEY"
     ["anthropic"]="ANTHROPIC_API_KEY"
     ["openai"]="OPENAI_API_KEY"
-    ["claude-max"]=""  # Uses Claude Code CLI tokens
 )
 declare -A PROVIDER_MODELS=(
     ["openrouter"]="openrouter/moonshotai/kimi-k2.5-0127"
     ["anthropic"]="claude-opus-4-5-20251101"
     ["openai"]="gpt-5.2"
-    ["claude-max"]="anthropic/claude-opus-4-5-20251101"
 )
 declare -A PROVIDER_URLS=(
     ["openrouter"]="https://openrouter.ai/keys"
     ["anthropic"]="https://console.anthropic.com/settings/keys"
     ["openai"]="https://platform.openai.com/api-keys"
-    ["claude-max"]="(requires Claude Code CLI: npm install -g @anthropic-ai/claude-code)"
 )
 
 print_header() {
@@ -147,15 +144,11 @@ prompt_provider() {
     fi
     
     local i=1
-    for provider in openrouter anthropic openai claude-max; do
+    for provider in openrouter anthropic openai; do
         local desc="${PROVIDERS[$provider]}"
         local detected=""
         if [[ " ${DETECTED_PROVIDERS[*]} " =~ " $provider " ]]; then
             detected="${GREEN}[key found]${NC}"
-        fi
-        # Check for Claude Code CLI for claude-max
-        if [[ "$provider" == "claude-max" ]] && [ -f "$HOME/.claude/.credentials.json" ]; then
-            detected="${GREEN}[Claude Code authenticated]${NC}"
         fi
         echo -e "  $i) $desc $detected"
         ((i++))
@@ -169,14 +162,13 @@ prompt_provider() {
         default_choice=3
     fi
     
-    read -p "Choose provider [1-4, default=$default_choice]: " choice < /dev/tty
+    read -p "Choose provider [1-3, default=$default_choice]: " choice < /dev/tty
     choice=${choice:-$default_choice}
     
     case $choice in
         1) SELECTED_PROVIDER="openrouter" ;;
         2) SELECTED_PROVIDER="anthropic" ;;
         3) SELECTED_PROVIDER="openai" ;;
-        4) SELECTED_PROVIDER="claude-max" ;;
         *) SELECTED_PROVIDER="openrouter" ;;
     esac
     
@@ -200,21 +192,6 @@ prompt_model() {
 prompt_api_key() {
     local key_name="${PROVIDER_KEYS[$SELECTED_PROVIDER]}"
     local key_url="${PROVIDER_URLS[$SELECTED_PROVIDER]}"
-    
-    # Claude Max uses Claude Code CLI tokens
-    if [[ "$SELECTED_PROVIDER" == "claude-max" ]]; then
-        echo ""
-        if [ -f "$HOME/.claude/.credentials.json" ]; then
-            echo -e "${GREEN}Found Claude Code CLI credentials${NC}"
-            API_KEY=""
-        else
-            echo -e "${YELLOW}Claude Code CLI not authenticated${NC}"
-            echo "   Install: npm install -g @anthropic-ai/claude-code"
-            echo "   Then run: claude login"
-            error "Please authenticate Claude Code CLI first"
-        fi
-        return
-    fi
     
     # Check if already have key
     local existing_key=""
