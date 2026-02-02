@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 logger = logging.getLogger(__name__)
 
 # Max lines of recalled memories before summarization
-MAX_RECALL_LINES = 50
+MAX_RECALL_LINES = 500
 
 # Minimum score threshold for including memories
 MIN_SCORE_THRESHOLD = 0.3
@@ -102,9 +102,9 @@ class Hippocampus:
             return await self._summarize(memories)
         else:
             return (
-                "[Associative memory recall]\n"
+                "<associative_memory_recall>\n"
                 + memories
-                + "\n[End of recall]"
+                + "\n</associative_memory_recall>"
             )
     
     def _build_query(
@@ -220,18 +220,18 @@ class Hippocampus:
             if summary:
                 logger.info(f"Summarized {len(memories)} -> {len(summary)} chars")
                 return (
-                    "[Associative memory recall (summarized)]\n"
+                    "<associative_memory_recall summarized=\"true\">\n"
                     + summary.strip()
-                    + "\n[End of recall]"
+                    + "\n</associative_memory_recall>"
                 )
         except Exception as e:
             logger.warning(f"Summarization failed: {e}")
         
         # Fallback to unsummarized
         return (
-            "[Associative memory recall]\n"
+            "<associative_memory_recall>\n"
             + memories
-            + "\n[End of recall]"
+            + "\n</associative_memory_recall>"
         )
     
     async def augment_message(

@@ -109,7 +109,7 @@ class TestHippocampus:
         
         assert "user question" in result
         assert "context info" in result
-        assert "[Associative memory recall]" in result
+        assert "<associative_memory_recall>" in result
     
     @pytest.mark.asyncio
     async def test_augment_message_unchanged_when_no_recall(self, hippocampus, memory_store):
@@ -175,7 +175,7 @@ class TestHippocampus:
         
         mock_summarizer.assert_called_once()
         assert "Summarized content" in result
-        assert "(summarized)" in result
+        assert 'summarized="true"' in result
 
 
 if __name__ == "__main__":
