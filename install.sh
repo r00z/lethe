@@ -591,14 +591,27 @@ EOF
     $CONTAINER_CMD stop lethe 2>/dev/null || true
     $CONTAINER_CMD rm lethe 2>/dev/null || true
     
-    # Run container (--userns=keep-id maps container user to host user for file permissions)
-    $CONTAINER_CMD run -d \
-        --name lethe \
-        --restart unless-stopped \
-        --userns=keep-id \
-        --env-file "$CONFIG_DIR/container.env" \
-        -v "$WORKSPACE_DIR:/workspace:Z" \
-        lethe:latest
+    # Run container
+    # Podman: --userns=keep-id maps container user to host user for file permissions
+    # Docker: --user maps to host UID/GID directly
+    if [[ "$CONTAINER_CMD" == "podman" ]]; then
+        $CONTAINER_CMD run -d \
+            --name lethe \
+            --restart unless-stopped \
+            --userns=keep-id \
+            --env-file "$CONFIG_DIR/container.env" \
+            -v "$WORKSPACE_DIR:/workspace:Z" \
+            lethe:latest
+    else
+        # Docker - run as host user for file permissions
+        $CONTAINER_CMD run -d \
+            --name lethe \
+            --restart unless-stopped \
+            --user "$(id -u):$(id -g)" \
+            --env-file "$CONFIG_DIR/container.env" \
+            -v "$WORKSPACE_DIR:/workspace" \
+            lethe:latest
+    fi
     
     success "Container started"
     info "Workspace: $WORKSPACE_DIR"
