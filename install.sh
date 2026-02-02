@@ -8,6 +8,14 @@
 
 set -e
 
+# Require bash 4+ for associative arrays
+if [[ "${BASH_VERSINFO[0]}" -lt 4 ]]; then
+    echo "Error: This script requires bash 4.0 or later."
+    echo "On macOS, install with: brew install bash"
+    echo "Then run: /opt/homebrew/bin/bash install.sh"
+    exit 1
+fi
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -319,14 +327,20 @@ EOF
     success "Configuration saved to $CONFIG_DIR/.env"
 }
 
-setup_systemd() {
+setup_service() {
     local OS=$(detect_os)
     
-    if [[ "$OS" != "linux" && "$OS" != "wsl" ]]; then
-        warn "Systemd not available on $OS, skipping service setup"
-        return
+    if [[ "$OS" == "linux" || "$OS" == "wsl" ]]; then
+        setup_systemd
+    elif [[ "$OS" == "mac" ]]; then
+        setup_launchd
+    else
+        warn "Unknown OS, skipping service setup"
+        echo "Run manually: cd $INSTALL_DIR && uv run lethe"
     fi
-    
+}
+
+setup_systemd() {
     mkdir -p "$HOME/.config/systemd/user"
     
     cat > "$HOME/.config/systemd/user/lethe.service" << EOF
@@ -352,6 +366,47 @@ EOF
     
     success "Systemd service installed and started"
     info "View logs: journalctl --user -u lethe -f"
+}
+
+setup_launchd() {
+    mkdir -p "$HOME/Library/LaunchAgents"
+    
+    cat > "$HOME/Library/LaunchAgents/com.lethe.agent.plist" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.lethe.agent</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$HOME/.local/bin/uv</string>
+        <string>run</string>
+        <string>lethe</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>$INSTALL_DIR</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>$HOME/Library/Logs/lethe.log</string>
+    <key>StandardErrorPath</key>
+    <string>$HOME/Library/Logs/lethe.error.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+</dict>
+</plist>
+EOF
+
+    launchctl load "$HOME/Library/LaunchAgents/com.lethe.agent.plist"
+    
+    success "Launchd service installed and started"
+    info "View logs: tail -f ~/Library/Logs/lethe.log"
 }
 
 install_deps_and_run() {
@@ -395,7 +450,7 @@ main() {
     clone_repo
     install_deps_and_run
     setup_config
-    setup_systemd
+    setup_service
     
     echo ""
     echo -e "${GREEN}════════════════════════════════════════════════════════════${NC}"

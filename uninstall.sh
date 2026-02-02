@@ -54,12 +54,11 @@ echo -e "${NC}"
 echo ""
 echo "This will remove:"
 echo "  - System service (systemd/launchd)"
-echo "  - Container and image (if using safe mode)"
-echo "  - Installation scripts: $INSTALL_DIR"
+echo "  - Installation directory: $INSTALL_DIR"
 echo ""
 echo "This will NOT remove:"
-echo "  - Your data: ~/lethe/"
 echo "  - Your config: $CONFIG_DIR"
+echo "  - Your workspace: $INSTALL_DIR/workspace (if you want to keep data, back it up first)"
 echo ""
 read -p "Are you sure you want to uninstall Lethe? [y/N] " -n 1 -r < /dev/tty
 echo ""
@@ -89,25 +88,6 @@ if [ -f "$HOME/Library/LaunchAgents/com.lethe.agent.plist" ]; then
     success "Launchd service removed"
 fi
 
-# Stop and remove container
-if command -v docker &>/dev/null; then
-    if docker ps -a --format '{{.Names}}' | grep -q '^lethe$'; then
-        info "Removing Docker container..."
-        docker stop lethe 2>/dev/null || true
-        docker rm lethe 2>/dev/null || true
-        success "Docker container removed"
-    fi
-fi
-
-if command -v podman &>/dev/null; then
-    if podman ps -a --format '{{.Names}}' | grep -q '^lethe$'; then
-        info "Removing Podman container..."
-        podman stop lethe 2>/dev/null || true
-        podman rm lethe 2>/dev/null || true
-        success "Podman container removed"
-    fi
-fi
-
 # Remove installation directory
 if [ -d "$INSTALL_DIR" ]; then
     info "Removing installation directory..."
@@ -118,9 +98,8 @@ fi
 echo ""
 success "Lethe has been uninstalled."
 echo ""
-echo "Your data and config are preserved at:"
-echo "  ~/lethe/          - workspace and databases"
-echo "  $CONFIG_DIR       - API tokens"
+echo "Your config is preserved at:"
+echo "  $CONFIG_DIR - API tokens and settings"
 echo ""
 echo "To reinstall:"
 echo "  curl -fsSL https://lethe.gg/install | bash"
