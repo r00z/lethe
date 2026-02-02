@@ -150,9 +150,7 @@ async def run():
         """Get active reminders as formatted string."""
         from lethe.todos import TodoManager
         todo_manager = TodoManager(settings.db_path)
-        await todo_manager.initialize()
         todos = await todo_manager.list(status="pending")
-        await todo_manager.close()
         
         if not todos:
             return ""
