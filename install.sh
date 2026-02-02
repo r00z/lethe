@@ -55,6 +55,11 @@ declare -A PROVIDER_MODELS=(
     ["anthropic"]="claude-opus-4-5-20251101"
     ["openai"]="gpt-5.2"
 )
+declare -A PROVIDER_MODELS_AUX=(
+    ["openrouter"]="openrouter/moonshotai/kimi-k2.5-0127"
+    ["anthropic"]="claude-haiku-4-5-20251001"
+    ["openai"]="gpt-5.2-mini"
+)
 declare -A PROVIDER_URLS=(
     ["openrouter"]="https://openrouter.ai/keys"
     ["anthropic"]="https://console.anthropic.com/settings/keys"
@@ -177,16 +182,32 @@ prompt_provider() {
 
 prompt_model() {
     local default_model="${PROVIDER_MODELS[$SELECTED_PROVIDER]}"
+    local default_aux="${PROVIDER_MODELS_AUX[$SELECTED_PROVIDER]}"
+    
     echo ""
-    echo -e "${BLUE}Default model for $SELECTED_PROVIDER: ${CYAN}$default_model${NC}"
-    read -p "Press Enter to use default, or enter custom model: " custom_model < /dev/tty
+    echo -e "${BLUE}Main model${NC} (for conversations):"
+    echo -e "  Default: ${CYAN}$default_model${NC}"
+    read -p "  Press Enter for default, or enter custom: " custom_model < /dev/tty
     
     if [ -n "$custom_model" ]; then
         SELECTED_MODEL="$custom_model"
     else
         SELECTED_MODEL="$default_model"
     fi
-    success "Model: $SELECTED_MODEL"
+    
+    echo ""
+    echo -e "${BLUE}Auxiliary model${NC} (for heartbeats, summarization - cheaper/faster):"
+    echo -e "  Default: ${CYAN}$default_aux${NC}"
+    read -p "  Press Enter for default, or enter custom: " custom_aux < /dev/tty
+    
+    if [ -n "$custom_aux" ]; then
+        SELECTED_MODEL_AUX="$custom_aux"
+    else
+        SELECTED_MODEL_AUX="$default_aux"
+    fi
+    
+    success "Main model: $SELECTED_MODEL"
+    success "Aux model: $SELECTED_MODEL_AUX"
 }
 
 prompt_api_key() {
@@ -352,6 +373,7 @@ TELEGRAM_ALLOWED_USER_IDS=$TELEGRAM_USER_ID
 # LLM Provider
 LLM_PROVIDER=$SELECTED_PROVIDER
 LLM_MODEL=$SELECTED_MODEL
+LLM_MODEL_AUX=$SELECTED_MODEL_AUX
 $api_key_line
 
 # Optional: Heartbeat interval (seconds, default 900 = 15 min)
@@ -523,6 +545,7 @@ TELEGRAM_BOT_TOKEN=$TELEGRAM_TOKEN
 TELEGRAM_ALLOWED_USER_IDS=$TELEGRAM_USER_ID
 LLM_PROVIDER=$SELECTED_PROVIDER
 LLM_MODEL=$SELECTED_MODEL
+LLM_MODEL_AUX=$SELECTED_MODEL_AUX
 $key_name=$API_KEY
 HEARTBEAT_ENABLED=true
 HIPPOCAMPUS_ENABLED=true
@@ -609,7 +632,7 @@ main() {
         echo -e "${GREEN}════════════════════════════════════════════════════════════${NC}"
         echo ""
         echo "  Provider: $SELECTED_PROVIDER"
-        echo "  Model: $SELECTED_MODEL"
+        echo "  Model: $SELECTED_MODEL (aux: $SELECTED_MODEL_AUX)"
         echo "  Workspace: $WORKSPACE_DIR (agent can only access this directory)"
         echo ""
         echo "  Message your bot on Telegram to get started!"
@@ -632,7 +655,7 @@ main() {
         echo -e "${GREEN}════════════════════════════════════════════════════════════${NC}"
         echo ""
         echo "  Provider: $SELECTED_PROVIDER"
-        echo "  Model: $SELECTED_MODEL"
+        echo "  Model: $SELECTED_MODEL (aux: $SELECTED_MODEL_AUX)"
         echo -e "  ${YELLOW}WARNING: Agent has full system access${NC}"
         echo ""
         echo "  Message your bot on Telegram to get started!"
