@@ -43,13 +43,13 @@ declare -A PROVIDERS=(
     ["openrouter"]="OpenRouter (recommended - access to all models)"
     ["anthropic"]="Anthropic API (Claude models with API key)"
     ["openai"]="OpenAI (GPT models)"
-    ["claude-max"]="Claude Max subscription (uses OAuth, no API key needed)"
+    ["claude-max"]="Claude Max (uses Claude Code CLI authentication)"
 )
 declare -A PROVIDER_KEYS=(
     ["openrouter"]="OPENROUTER_API_KEY"
     ["anthropic"]="ANTHROPIC_API_KEY"
     ["openai"]="OPENAI_API_KEY"
-    ["claude-max"]=""  # Uses OAuth
+    ["claude-max"]=""  # Uses Claude Code CLI tokens
 )
 declare -A PROVIDER_MODELS=(
     ["openrouter"]="openrouter/moonshotai/kimi-k2.5-0127"
@@ -61,7 +61,7 @@ declare -A PROVIDER_URLS=(
     ["openrouter"]="https://openrouter.ai/keys"
     ["anthropic"]="https://console.anthropic.com/settings/keys"
     ["openai"]="https://platform.openai.com/api-keys"
-    ["claude-max"]="(OAuth - no API key needed)"
+    ["claude-max"]="(requires Claude Code CLI: npm install -g @anthropic-ai/claude-code)"
 )
 
 print_header() {
@@ -153,6 +153,10 @@ prompt_provider() {
         if [[ " ${DETECTED_PROVIDERS[*]} " =~ " $provider " ]]; then
             detected="${GREEN}[key found]${NC}"
         fi
+        # Check for Claude Code CLI for claude-max
+        if [[ "$provider" == "claude-max" ]] && [ -f "$HOME/.claude/.credentials.json" ]; then
+            detected="${GREEN}[Claude Code authenticated]${NC}"
+        fi
         echo -e "  $i) $desc $detected"
         ((i++))
     done
@@ -197,12 +201,18 @@ prompt_api_key() {
     local key_name="${PROVIDER_KEYS[$SELECTED_PROVIDER]}"
     local key_url="${PROVIDER_URLS[$SELECTED_PROVIDER]}"
     
-    # Claude Max uses OAuth, no API key needed
+    # Claude Max uses Claude Code CLI tokens
     if [[ "$SELECTED_PROVIDER" == "claude-max" ]]; then
         echo ""
-        echo -e "${GREEN}Claude Max uses OAuth authentication${NC}"
-        echo "   You'll be prompted to log in via browser on first run."
-        API_KEY=""
+        if [ -f "$HOME/.claude/.credentials.json" ]; then
+            echo -e "${GREEN}Found Claude Code CLI credentials${NC}"
+            API_KEY=""
+        else
+            echo -e "${YELLOW}Claude Code CLI not authenticated${NC}"
+            echo "   Install: npm install -g @anthropic-ai/claude-code"
+            echo "   Then run: claude login"
+            error "Please authenticate Claude Code CLI first"
+        fi
         return
     fi
     

@@ -57,106 +57,20 @@ async def run():
     console.print(f"Memory: {settings.memory_dir}")
     console.print()
     
-    # Get primary user ID for OAuth messages
-    allowed_ids = settings.telegram_allowed_user_ids
-    primary_chat_id = int(allowed_ids.split(",")[0]) if allowed_ids else None
-    
-    # Check if Claude Max needs OAuth setup
+    # Check if Claude Max is configured - requires Claude Code CLI authentication
     provider = os.environ.get("LLM_PROVIDER", "").lower()
-    oauth_pending = False
-    oauth_instance = None
     
     if provider == "claude-max":
         from lethe.oauth import ClaudeOAuth
         oauth_instance = ClaudeOAuth()
         if not oauth_instance.has_valid_tokens():
-            oauth_pending = True
-            # Need to authenticate - create minimal bot to send auth URL and wait
-            from aiogram import Bot, Dispatcher
-            from aiogram.filters import Command
-            from aiogram.types import Message
-            
-            oauth_bot = Bot(token=settings.telegram_bot_token)
-            oauth_dp = Dispatcher()
-            oauth_complete = asyncio.Event()
-            
-            auth_url = oauth_instance.start_auth_flow()
-            message = (
-                "🔐 Claude Max Authentication Required\n\n"
-                "1️⃣ Click this link to authenticate:\n"
-                f"{auth_url}\n\n"
-                "2️⃣ After logging in, you'll see a page that won't load.\n"
-                "3️⃣ Copy the ENTIRE URL from your browser.\n"
-                "4️⃣ Send it here with: /oauth <url>\n\n"
-                "Example: /oauth http://localhost:19532/callback?code=abc&state=xyz"
-            )
-            
-            @oauth_dp.message(Command("oauth"))
-            async def handle_oauth(msg: Message):
-                if msg.from_user.id != primary_chat_id:
-                    return
-                text = msg.text or ""
-                parts = text.split(maxsplit=1)
-                if len(parts) < 2:
-                    await msg.answer("Usage: /oauth <redirect_url>")
-                    return
-                try:
-                    await oauth_instance.complete_auth_flow(parts[1].strip())
-                    await msg.answer("✅ Authentication successful! Starting Lethe...")
-                    oauth_complete.set()
-                except Exception as e:
-                    await msg.answer(f"❌ Error: {e}")
-            
-            # Check if we're running locally (can use local HTTP server)
-            # vs remotely (need Telegram-based flow)
-            is_local = os.environ.get("LETHE_REMOTE", "").lower() != "true"
-            
-            if is_local:
-                # Use local HTTP server to catch callback
-                console.print("[yellow]Claude Max authentication required![/yellow]")
-                console.print("[dim]Starting local server for OAuth callback...[/dim]")
-                await oauth_instance._authenticate_with_local_server()
-                console.print("[green]OAuth complete![/green]")
-                oauth_pending = False
-            elif primary_chat_id:
-                # Remote mode: use Telegram for OAuth flow
-                console.print("[yellow]Claude Max authentication required![/yellow]")
-                await oauth_bot.send_message(primary_chat_id, message)
-                console.print("[dim]Auth URL sent to Telegram. Waiting for /oauth command...[/dim]")
-                
-                # Run minimal bot until OAuth completes
-                async def wait_for_oauth():
-                    await oauth_complete.wait()
-                
-                polling_task = asyncio.create_task(
-                    oauth_dp.start_polling(oauth_bot, handle_signals=False)
-                )
-                wait_task = asyncio.create_task(wait_for_oauth())
-                
-                # Wait for OAuth to complete
-                done, pending = await asyncio.wait(
-                    [polling_task, wait_task],
-                    return_when=asyncio.FIRST_COMPLETED
-                )
-                
-                # Cancel polling
-                polling_task.cancel()
-                try:
-                    await polling_task
-                except asyncio.CancelledError:
-                    pass
-                
-                await oauth_bot.session.close()
-                console.print("[green]OAuth complete![/green]")
-                oauth_pending = False
-            else:
-                console.print("[yellow]Claude Max authentication required![/yellow]")
-                console.print(f"\nVisit: {auth_url}\n")
-                console.print("Then paste the redirect URL below:")
-                redirect_url = input("Redirect URL: ").strip()
-                await oauth_instance.complete_auth_flow(redirect_url)
-                oauth_pending = False
+            console.print("[red]Claude Max requires Claude Code CLI to be authenticated![/red]")
+            console.print("\nPlease run:")
+            console.print("  [cyan]claude login[/cyan]")
+            console.print("\nThen restart Lethe.")
+            sys.exit(1)
         
+        console.print("[green]Using Claude Max subscription (via Claude Code CLI)[/green]")
         # Store oauth instance for agent to use
         import lethe.agent as agent_module
         agent_module._oauth_instance = oauth_instance

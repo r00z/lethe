@@ -37,6 +37,37 @@ REDIRECT_URI = "http://localhost:19532/callback"
 # Token storage
 DEFAULT_TOKEN_PATH = Path("~/.config/lethe/claude_tokens.json").expanduser()
 
+# Claude Code CLI credentials path
+CLAUDE_CODE_CREDENTIALS = Path("~/.claude/.credentials.json").expanduser()
+
+
+def get_claude_code_tokens() -> Optional["OAuthTokens"]:
+    """Read tokens from Claude Code CLI if available."""
+    if not CLAUDE_CODE_CREDENTIALS.exists():
+        return None
+    
+    try:
+        data = json.loads(CLAUDE_CODE_CREDENTIALS.read_text())
+        oauth_data = data.get("claudeAiOauth", {})
+        
+        if not oauth_data.get("accessToken"):
+            return None
+        
+        # Convert expiresAt from milliseconds to datetime
+        expires_at = datetime.fromtimestamp(
+            oauth_data["expiresAt"] / 1000, 
+            tz=timezone.utc
+        )
+        
+        return OAuthTokens(
+            access_token=oauth_data["accessToken"],
+            refresh_token=oauth_data.get("refreshToken", ""),
+            expires_at=expires_at,
+        )
+    except Exception as e:
+        logger.warning(f"Failed to read Claude Code credentials: {e}")
+        return None
+
 
 @dataclass
 class OAuthTokens:
@@ -106,14 +137,29 @@ class ClaudeOAuth:
         self._load_tokens()
     
     def _load_tokens(self):
-        """Load tokens from disk if available."""
+        """Load tokens from disk if available.
+        
+        Checks in order:
+        1. Our own token storage
+        2. Claude Code CLI credentials (if installed)
+        """
+        # First check our own storage
         if self.token_path.exists():
             try:
                 data = json.loads(self.token_path.read_text())
                 self._tokens = OAuthTokens.from_dict(data)
                 logger.info("Loaded existing Claude OAuth tokens")
+                return
             except Exception as e:
                 logger.warning(f"Failed to load tokens: {e}")
+        
+        # Fall back to Claude Code CLI credentials
+        claude_tokens = get_claude_code_tokens()
+        if claude_tokens:
+            self._tokens = claude_tokens
+            logger.info("Loaded tokens from Claude Code CLI")
+            # Save to our own storage for future use
+            self._save_tokens()
     
     def _save_tokens(self):
         """Save tokens to disk."""
