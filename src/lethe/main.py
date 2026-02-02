@@ -13,7 +13,7 @@ load_dotenv()
 from rich.console import Console
 from rich.logging import RichHandler
 
-from lethe.agent import Agent, set_oauth_callbacks
+from lethe.agent import Agent
 from lethe.config import get_settings
 from lethe.conversation import ConversationManager
 from lethe.telegram import TelegramBot

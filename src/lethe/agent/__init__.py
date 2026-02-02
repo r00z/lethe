@@ -1,7 +1,6 @@
 """Lethe Agent - Local agent with memory and tool execution.
 
 Uses the local memory layer (LanceDB) and direct LLM calls.
-Supports multiple providers including Claude Max subscription via OAuth.
 Tools are just Python functions - no complex registration or approval loops.
 """
 
@@ -15,33 +14,6 @@ from lethe.memory import MemoryStore, AsyncLLMClient, LLMConfig, Hippocampus
 from lethe.tools import get_all_tools, function_to_schema
 
 logger = logging.getLogger(__name__)
-
-# OAuth support (lazy import to avoid circular deps)
-_oauth_instance = None
-_oauth_send_message = None
-_oauth_receive_message = None
-
-
-def set_oauth_callbacks(
-    send_message: Optional[Callable] = None,
-    receive_message: Optional[Callable] = None,
-):
-    """Set callbacks for OAuth flow (called from main.py with Telegram functions)."""
-    global _oauth_send_message, _oauth_receive_message
-    _oauth_send_message = send_message
-    _oauth_receive_message = receive_message
-
-
-async def _get_oauth_token() -> str:
-    """Get OAuth token for Claude Max, initializing if needed."""
-    global _oauth_instance
-    if _oauth_instance is None:
-        from lethe.oauth import ensure_claude_max_auth
-        _oauth_instance = await ensure_claude_max_auth(
-            send_message=_oauth_send_message,
-            receive_message=_oauth_receive_message,
-        )
-    return await _oauth_instance.get_access_token()
 
 
 class Agent:
@@ -64,18 +36,13 @@ class Agent:
         )
         
         # Initialize LLM client (provider auto-detected from env vars)
-        # Check if using OAuth provider (claude-max)
-        provider = os.environ.get("LLM_PROVIDER", "").lower()
-        oauth_getter = _get_oauth_token if provider == "claude-max" else None
-        
         # Only pass model if explicitly set in env (otherwise use provider default)
         explicit_model = os.environ.get("LLM_MODEL", "")
         
         llm_config = LLMConfig(
-            provider=provider or "",  # Empty = auto-detect
+            provider=os.environ.get("LLM_PROVIDER", ""),  # Empty = auto-detect
             model=explicit_model,  # Empty = use provider default
             context_limit=self.settings.llm_context_limit,
-            oauth_token_getter=oauth_getter,
         )
         
         # Load system prompt from config

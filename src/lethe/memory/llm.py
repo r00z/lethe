@@ -54,22 +54,17 @@ PROVIDERS = {
         "env_key": "OPENROUTER_API_KEY",
         "model_prefix": "openrouter/",
         "default_model": "openrouter/moonshotai/kimi-k2.5-0127",  # Latest Kimi K2.5
-        "uses_oauth": False,
     },
     "anthropic": {
         "env_key": "ANTHROPIC_API_KEY",
         "model_prefix": "",  # litellm auto-detects claude models
         "default_model": "claude-opus-4-5-20251101",  # Claude Opus 4.5
-        "uses_oauth": False,
     },
     "openai": {
         "env_key": "OPENAI_API_KEY",
         "model_prefix": "",  # litellm auto-detects gpt models
         "default_model": "gpt-5.2",  # GPT-5.2
-        "uses_oauth": False,
     },
-    # NOTE: claude-max disabled - Anthropic blocked third-party OAuth in Jan 2026
-    # Use "anthropic" provider with API key instead
 }
 
 DEFAULT_PROVIDER = "openrouter"
@@ -104,7 +99,7 @@ class LLMConfig:
     context_limit: int = DEFAULT_CONTEXT_LIMIT
     max_output_tokens: int = DEFAULT_MAX_OUTPUT
     temperature: float = 0.7
-    oauth_token_getter: Optional[Callable] = None  # For OAuth providers
+
     
     def __post_init__(self):
         # Auto-detect provider from environment if not set
@@ -124,16 +119,10 @@ class LLMConfig:
             if prefix and not self.model.startswith(prefix):
                 self.model = prefix + self.model
         
-        # Check authentication
-        if provider_config.get("uses_oauth"):
-            # OAuth provider - token getter must be provided or set later
-            if not self.oauth_token_getter:
-                logger.warning(f"OAuth provider {self.provider} requires oauth_token_getter")
-        else:
-            # API key provider - verify key exists
-            env_key = provider_config.get("env_key")
-            if env_key and not os.environ.get(env_key):
-                raise ValueError(f"{env_key} not set")
+        # Verify API key exists
+        env_key = provider_config.get("env_key")
+        if env_key and not os.environ.get(env_key):
+            raise ValueError(f"{env_key} not set")
         
         logger.info(f"LLM config: provider={self.provider}, model={self.model}")
     
@@ -154,9 +143,7 @@ class LLMConfig:
         # Default
         return DEFAULT_PROVIDER
     
-    def uses_oauth(self) -> bool:
-        """Check if this provider uses OAuth."""
-        return PROVIDERS.get(self.provider, {}).get("uses_oauth", False)
+
 
 
 @dataclass
@@ -586,14 +573,6 @@ class AsyncLLMClient:
         }
         
         # Add OAuth token for claude-max provider
-        if self.config.uses_oauth() and self.config.oauth_token_getter:
-            token = await self.config.oauth_token_getter()
-            kwargs["api_key"] = token
-            # Also set api_base for Anthropic
-            provider_config = PROVIDERS.get(self.config.provider, {})
-            if "api_base" in provider_config:
-                kwargs["api_base"] = provider_config["api_base"]
-        
         return kwargs
     
     async def _call_api(self) -> Dict:
