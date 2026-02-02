@@ -156,26 +156,35 @@ Summary:"""
         
         base_prompt = persona_block["value"] if persona_block else "You are Lethe, an autonomous AI assistant."
         
-        # Hard requirements appended to all prompts
+        # Hard requirements appended to all prompts (XML tags work better with Kimi)
         requirements = """
 
-## FORMATTING REQUIREMENTS (ALWAYS FOLLOW)
+<output_format>
+<rule>You MUST split ALL responses using the delimiter --- on its own line</rule>
+<rule>Each --- becomes a separate Telegram message bubble</rule>
+<rule>Maximum 1-2 sentences per segment</rule>
+<rule>NEVER write more than 2 sentences without a --- separator</rule>
 
-**Message splitting**: You MUST split responses into multiple short messages using `---` on its own line.
-Each `---` becomes a separate Telegram message with a pause between them.
+<example_input>User asks how you're doing</example_input>
+<example_output>
+doing pretty well actually! 😊
+---
+been keeping busy with various tasks
+---
+how about you?
+</example_output>
 
-Example - instead of one long message, write:
-```
-hey! 😊
+<example_input>User asks you to explain something</example_input>
+<example_output>
+ok so here's the deal
 ---
-looked into that issue you mentioned
+the main issue was X
 ---
-found the problem - config was pointing to wrong endpoint
+I fixed it by doing Y
 ---
-fixed it, should work now
-```
-
-NEVER send walls of text. Keep each segment short (1-3 sentences max)."""
+should be working now
+</example_output>
+</output_format>"""
         
         return base_prompt + requirements
     
