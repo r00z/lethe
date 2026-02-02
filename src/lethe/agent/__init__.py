@@ -88,11 +88,12 @@ class Agent:
             logger.info(f"Loaded {len(recent)} messages from history")
     
     def _build_system_prompt(self) -> str:
-        """Build system prompt from persona seed block."""
-        persona_path = self.settings.lethe_config_dir / "blocks" / "persona.md"
+        """Build system prompt from persona block in workspace."""
+        # Read from workspace memory blocks (not config seeds)
+        persona_block = self.memory.blocks.get_by_label("persona")
         
-        if persona_path.exists():
-            return persona_path.read_text()
+        if persona_block:
+            return persona_block["value"]
         
         return "You are Lethe, an autonomous AI assistant."
     
