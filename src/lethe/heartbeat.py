@@ -18,12 +18,13 @@ DEFAULT_HEARTBEAT_INTERVAL = 15 * 60
 
 HEARTBEAT_MESSAGE = """[System Heartbeat - {timestamp}]
 
-This is a periodic check-in. Review your memory blocks and consider:
+Periodic check-in. Review your memory (human block, project block, tasks) and consider:
+- What are the user's current goals? Is there anything you can proactively help with?
 - Any pending tasks or reminders that are due?
-- Anything important to surface to the user?
-- Any follow-ups from recent conversations?
+- Any follow-ups from recent conversations worth surfacing?
+- Any time-sensitive information the user should know?
 
-If there's something worth telling the user, send a message. If not, just acknowledge the heartbeat silently (no response needed).
+Be proactive about advancing the user's goals - but don't be annoying. If there's genuinely nothing useful to say, respond with just "ok" and nothing will be sent. Only message the user if you have something valuable to tell them.
 """
 
 
@@ -113,8 +114,9 @@ class Heartbeat:
             # If agent has something to say, send it
             if response and response.strip():
                 # Filter out "acknowledged" type responses
-                lower = response.lower()
-                if not any(x in lower for x in ["acknowledged", "no updates", "nothing to report", "heartbeat received"]):
+                lower = response.lower().strip()
+                silent_acks = ["ok", "acknowledged", "no updates", "nothing to report", "heartbeat received", "nothing new"]
+                if lower not in silent_acks and not any(x in lower for x in silent_acks):
                     logger.info(f"Heartbeat response: {response[:100]}...")
                     await self.send_callback(response)
                 else:
