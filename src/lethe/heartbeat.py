@@ -78,6 +78,9 @@ class Heartbeat:
     
     async def _heartbeat_loop(self):
         """Main heartbeat loop."""
+        # Initial heartbeat on startup
+        await self._send_heartbeat()
+        
         while self._running:
             try:
                 # Wait for interval
