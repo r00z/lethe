@@ -109,6 +109,7 @@ class LLMConfig:
     provider: str = ""  # Auto-detect if not set
     model: str = ""  # Use provider default if not set
     model_aux: str = ""  # Auxiliary model for heartbeats, summarization (empty = use main)
+    api_base: str = ""  # Custom API base URL for local/compatible providers
     context_limit: int = DEFAULT_CONTEXT_LIMIT
     max_output_tokens: int = DEFAULT_MAX_OUTPUT
     temperature: float = 0.7
@@ -592,6 +593,9 @@ class AsyncLLMClient:
             "temperature": self.config.temperature,
             "max_tokens": self.config.max_output_tokens,
         }
+        # Custom API base for local/compatible providers
+        if self.config.api_base:
+            kwargs["api_base"] = self.config.api_base
         return kwargs
     
     async def _call_api(self) -> Dict:

@@ -41,6 +41,7 @@ class Agent:
             provider=os.environ.get("LLM_PROVIDER", ""),  # Empty = auto-detect
             model=self.settings.llm_model,  # Empty = use provider default
             model_aux=self.settings.llm_model_aux,  # Empty = use provider default aux
+            api_base=self.settings.llm_api_base,  # Custom API URL for local providers
             context_limit=self.settings.llm_context_limit,
         )
         

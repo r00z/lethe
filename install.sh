@@ -208,6 +208,19 @@ prompt_model() {
     
     success "Main model: $SELECTED_MODEL"
     success "Aux model: $SELECTED_MODEL_AUX"
+    
+    # Optional: Custom API base URL
+    echo ""
+    echo -e "${BLUE}Custom API URL${NC} (for local/compatible providers like Ollama, vLLM, etc.):"
+    echo -e "  Leave empty to use default provider URL"
+    read -p "  Custom API base URL (or Enter to skip): " custom_api_base < /dev/tty
+    
+    if [ -n "$custom_api_base" ]; then
+        SELECTED_API_BASE="$custom_api_base"
+        success "API base: $SELECTED_API_BASE"
+    else
+        SELECTED_API_BASE=""
+    fi
 }
 
 prompt_api_key() {
@@ -395,6 +408,7 @@ TELEGRAM_ALLOWED_USER_IDS=$TELEGRAM_USER_ID
 LLM_PROVIDER=$SELECTED_PROVIDER
 LLM_MODEL=$SELECTED_MODEL
 LLM_MODEL_AUX=$SELECTED_MODEL_AUX
+LLM_API_BASE=$SELECTED_API_BASE
 $api_key_line
 
 # Optional: Heartbeat interval (seconds, default 900 = 15 min)
@@ -567,6 +581,7 @@ TELEGRAM_ALLOWED_USER_IDS=$TELEGRAM_USER_ID
 LLM_PROVIDER=$SELECTED_PROVIDER
 LLM_MODEL=$SELECTED_MODEL
 LLM_MODEL_AUX=$SELECTED_MODEL_AUX
+LLM_API_BASE=$SELECTED_API_BASE
 $key_name=$API_KEY
 HEARTBEAT_ENABLED=true
 HIPPOCAMPUS_ENABLED=true
