@@ -222,9 +222,9 @@ class BlockManager:
                     continue
                 blocks.append(block)
         
-        # Custom sort order - persona first, then human, project, tools, tasks, rest alphabetically
-        order = {"persona": 0, "human": 1, "project": 2, "tools": 3, "tasks": 4}
-        return sorted(blocks, key=lambda b: (order.get(b["label"], 99), b["label"]))
+        # Order: human, project, tools, tasks, then persona LAST (closest to messages for attention)
+        order = {"human": 0, "project": 1, "tools": 2, "tasks": 3, "persona": 99}
+        return sorted(blocks, key=lambda b: (order.get(b["label"], 50), b["label"]))
     
     def str_replace(self, label: str, old_str: str, new_str: str) -> bool:
         """Replace text in a block.
