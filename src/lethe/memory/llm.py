@@ -350,8 +350,44 @@ class ContextWindow:
             "keep_ratio": f"{SLIDING_WINDOW_KEEP_RATIO * 100:.0f}%",
         }
     
+    def _clean_orphaned_tool_messages(self):
+        """Remove tool messages that don't have matching tool_use in previous assistant message.
+        
+        Anthropic requires tool_result to immediately follow tool_use.
+        This prevents errors when context gets corrupted mid-session.
+        """
+        if not self.messages:
+            return
+        
+        clean_messages = []
+        pending_tool_ids = set()  # tool IDs we expect results for
+        
+        for msg in self.messages:
+            if msg.role == "assistant" and msg.tool_calls:
+                # Track expected tool IDs
+                pending_tool_ids = {tc["id"] for tc in msg.tool_calls}
+                clean_messages.append(msg)
+            elif msg.role == "tool" and msg.tool_call_id:
+                # Only keep tool results that have matching pending tool_use
+                if msg.tool_call_id in pending_tool_ids:
+                    clean_messages.append(msg)
+                    pending_tool_ids.discard(msg.tool_call_id)
+                else:
+                    logger.warning(f"Removing orphaned tool message: {msg.tool_call_id}")
+            else:
+                # Regular user/assistant message - reset pending
+                pending_tool_ids.clear()
+                clean_messages.append(msg)
+        
+        if len(clean_messages) != len(self.messages):
+            logger.info(f"Cleaned {len(self.messages) - len(clean_messages)} orphaned tool messages")
+            self.messages = clean_messages
+    
     def build_messages(self) -> List[Dict]:
         """Build messages array for API call."""
+        # Clean orphaned tool messages before building
+        self._clean_orphaned_tool_messages()
+        
         # Combine system prompt with memory context and summary
         system_content = f"""{self.system_prompt}
 
