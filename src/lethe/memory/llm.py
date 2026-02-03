@@ -19,16 +19,19 @@ logger = logging.getLogger(__name__)
 
 
 def strip_thinking_tags(content: str) -> str:
-    """Strip <think>...</think> or <thinking>...</thinking> blocks from model output.
+    """Strip reasoning/wrapper tags from model output.
     
     Some models (Kimi, Claude with extended thinking) output reasoning in these tags.
     """
     import re
     if not content:
         return content
-    # Strip <think>...</think> and <thinking>...</thinking> blocks
+    # Strip thinking blocks
     content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL)
     content = re.sub(r'<thinking>.*?</thinking>', '', content, flags=re.DOTALL)
+    # Strip result wrapper (keep inner content)
+    content = re.sub(r'<result>\s*', '', content)
+    content = re.sub(r'\s*</result>', '', content)
     return content.strip()
 
 
@@ -671,7 +674,7 @@ class AsyncLLMClient:
             # Callback with intermediate message (only when there are tool calls - i.e. more work to do)
             # Don't callback with final response - that's returned and handled by caller
             if content and on_message and tool_calls:
-                await on_message(content)
+                await on_message(strip_thinking_tags(content))
             if tool_calls:
                 # Add assistant message with tool calls
                 self.context.add_message(Message(
