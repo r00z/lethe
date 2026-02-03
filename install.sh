@@ -30,7 +30,8 @@ NC='\033[0m' # No Color
 
 # Config
 REPO_URL="https://github.com/atemerev/lethe.git"
-REPO_BRANCH="main"
+REPO_OWNER="atemerev"
+REPO_NAME="lethe"
 INSTALL_DIR="${LETHE_INSTALL_DIR:-$HOME/.lethe}"
 CONFIG_DIR="${LETHE_CONFIG_DIR:-$HOME/.config/lethe}"
 WORKSPACE_DIR="${LETHE_WORKSPACE_DIR:-$HOME/lethe}"
@@ -73,7 +74,7 @@ print_header() {
     echo "║   █░░ █▀▀ ▀█▀ █░█ █▀▀                                     ║"
     echo "║   █▄▄ ██▄ ░█░ █▀█ ██▄                                     ║"
     echo "║                                                           ║"
-    echo "║   Autonomous Executive Assistant (v2 - Local First)       ║"
+    echo "║   Autonomous Executive Assistant                           ║"
     echo "║                                                           ║"
     echo "╚═══════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
@@ -370,19 +371,40 @@ install_dependencies() {
     success "Python 3.11+ available"
 }
 
+get_latest_release() {
+    # Fetch latest release tag from GitHub API
+    local latest=$(curl -fsSL "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/latest" 2>/dev/null | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+    if [ -z "$latest" ]; then
+        # Fallback to main if no releases
+        echo "main"
+    else
+        echo "$latest"
+    fi
+}
+
 clone_repo() {
+    local version=$(get_latest_release)
+    info "Installing Lethe $version..."
+    
     if [ -d "$INSTALL_DIR" ]; then
         info "Updating existing installation..."
         cd "$INSTALL_DIR"
-        git fetch origin
-        git checkout "$REPO_BRANCH"
-        git pull origin "$REPO_BRANCH"
+        git fetch origin --tags
+        if [ "$version" != "main" ]; then
+            git checkout "$version"
+        else
+            git checkout main
+            git pull origin main
+        fi
     else
         info "Cloning Lethe..."
-        git clone -b "$REPO_BRANCH" "$REPO_URL" "$INSTALL_DIR"
+        git clone "$REPO_URL" "$INSTALL_DIR"
         cd "$INSTALL_DIR"
+        if [ "$version" != "main" ]; then
+            git checkout "$version"
+        fi
     fi
-    success "Repository ready"
+    success "Repository ready ($version)"
 }
 
 setup_config() {
