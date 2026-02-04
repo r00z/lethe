@@ -9,7 +9,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     nodejs \
     npm \
-    sudo \
     && rm -rf /var/lib/apt/lists/*
 
 # Install agent-browser for browser automation (with Playwright deps)
@@ -34,13 +33,6 @@ COPY config/ ./config/
 # Install dependencies (CPU-only PyTorch to save ~2GB)
 ENV UV_EXTRA_INDEX_URL=https://download.pytorch.org/whl/cpu
 RUN uv sync --frozen --index-strategy unsafe-best-match
-
-# Create non-root user with sudo access
-RUN useradd -m -s /bin/bash lethe && \
-    echo "lethe ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
-    chown -R lethe:lethe /app
-
-USER lethe
 
 # Environment
 ENV WORKSPACE_DIR=/workspace
