@@ -69,9 +69,15 @@ detect_install_mode() {
         fi
     fi
     
-    # Check for systemd service (Linux native)
+    # Check for systemd system service (root installs)
+    if [ -f "/etc/systemd/system/lethe.service" ]; then
+        echo "native-systemd-system"
+        return
+    fi
+    
+    # Check for systemd user service (Linux native)
     if [ -f "$HOME/.config/systemd/user/lethe.service" ]; then
-        echo "native-systemd"
+        echo "native-systemd-user"
         return
     fi
     
@@ -100,7 +106,16 @@ detect_install_dir() {
         return
     fi
     
-    # 3. Check systemd service for WorkingDirectory
+    # 3. Check systemd system service for WorkingDirectory (root installs)
+    if [ -f "/etc/systemd/system/lethe.service" ]; then
+        local wd=$(grep "WorkingDirectory=" "/etc/systemd/system/lethe.service" 2>/dev/null | cut -d= -f2)
+        if [ -n "$wd" ] && [ -d "$wd/.git" ]; then
+            echo "$wd"
+            return
+        fi
+    fi
+    
+    # 4. Check systemd user service for WorkingDirectory
     if [ -f "$HOME/.config/systemd/user/lethe.service" ]; then
         local wd=$(grep "WorkingDirectory=" "$HOME/.config/systemd/user/lethe.service" 2>/dev/null | cut -d= -f2)
         if [ -n "$wd" ] && [ -d "$wd/.git" ]; then
@@ -242,7 +257,7 @@ main() {
             success "Update complete!"
             ;;
             
-        native-systemd|native-launchd)
+        native-systemd-system|native-systemd-user|native-launchd)
             local install_dir=$(detect_install_dir)
             
             if [ -z "$install_dir" ] || [ ! -d "$install_dir" ]; then
@@ -266,8 +281,14 @@ main() {
             
             update_native "$install_dir" "$latest_version"
             
-            if [[ "$install_mode" == "native-systemd" ]]; then
-                info "Restarting systemd service..."
+            if [[ "$install_mode" == "native-systemd-system" ]]; then
+                info "Restarting systemd system service..."
+                sudo systemctl restart lethe 2>/dev/null || systemctl restart lethe
+                success "Service restarted!"
+                echo ""
+                echo "  View logs: journalctl -u lethe -f"
+            elif [[ "$install_mode" == "native-systemd-user" ]]; then
+                info "Restarting systemd user service..."
                 systemctl --user restart lethe
                 success "Service restarted!"
                 echo ""
