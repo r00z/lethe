@@ -10,6 +10,9 @@ if [ -n "$HOST_UID" ]; then
     # Give sudo access
     echo "hostuser ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
     
+    # Change ownership of app directory (venv was created by root during build)
+    chown -R hostuser:hostuser /app
+    
     # Run as the host user
     exec gosu hostuser "$@"
 else
