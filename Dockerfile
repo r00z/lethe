@@ -38,8 +38,7 @@ RUN uv sync --frozen --index-strategy unsafe-best-match
 # Create non-root user with sudo access
 RUN useradd -m -s /bin/bash lethe && \
     echo "lethe ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
-    chown -R lethe:lethe /app && \
-    chmod 777 /workspace
+    chown -R lethe:lethe /app /workspace
 
 USER lethe
 
