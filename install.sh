@@ -703,12 +703,11 @@ EOF
             -v "$WORKSPACE_DIR:/workspace:z" \
             lethe:latest
     else
-        # Traditional Docker - use gosu entrypoint for UID mapping
+        # Traditional Docker - run as root inside (simpler, apt works without sudo)
+        # File ownership on /workspace mount is handled by Docker
         $CONTAINER_CMD run -d \
             --name lethe \
             --restart unless-stopped \
-            -e HOST_UID=$(id -u) \
-            -e HOST_GID=$(id -g) \
             --env-file "$CONFIG_DIR/container.env" \
             -v "$WORKSPACE_DIR:/workspace" \
             lethe:latest
