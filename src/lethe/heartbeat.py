@@ -183,6 +183,9 @@ class Heartbeat:
                 logger.debug("No heartbeat response")
                 return
             
+            # Strip model reasoning tags from response
+            response = strip_model_tags(response)
+            
             # Summarize/evaluate response before deciding to send
             if self.summarize_callback:
                 prompt = SUMMARIZE_HEARTBEAT_PROMPT.format(response=response)
