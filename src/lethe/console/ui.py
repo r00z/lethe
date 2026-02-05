@@ -57,12 +57,6 @@ class ConsoleUI:
                     font-size: 11px;
                     margin: 8px 0 0 0;
                     padding: 0;
-                    max-width: 100%;
-                }
-                .scroll-container {
-                    max-height: 70vh;
-                    overflow-y: auto;
-                    overflow-x: hidden;
                 }
             </style>
             ''')
@@ -83,21 +77,18 @@ class ConsoleUI:
             with ui.tab_panels(tabs, value=messages_tab).classes("w-full"):
                 # Messages panel
                 with ui.tab_panel(messages_tab):
-                    with ui.scroll_area().classes("w-full scroll-container"):
-                        self.messages_container = ui.column().classes("w-full p-2 gap-1")
+                    self.messages_container = ui.column().classes("w-full p-2 gap-1")
                 
                 # Memory panel
                 with ui.tab_panel(memory_tab):
-                    with ui.scroll_area().classes("w-full scroll-container"):
-                        self.blocks_container = ui.column().classes("w-full p-2")
+                    self.blocks_container = ui.column().classes("w-full p-2")
                 
                 # Context panel
                 with ui.tab_panel(context_tab):
                     with ui.row().classes("w-full items-center mb-2 p-2"):
                         ui.label("Last context sent to LLM").classes("text-h6")
                         self.context_info = ui.chip("", icon="token").classes("ml-4")
-                    with ui.scroll_area().classes("w-full scroll-container"):
-                        self.context_container = ui.column().classes("w-full p-2 gap-1")
+                    self.context_container = ui.column().classes("w-full p-2 gap-1")
             
             # Initial data load
             self._load_initial_data()
@@ -264,7 +255,7 @@ class ConsoleUI:
             title="Lethe Console",
             favicon="🧠",
             show=False,
-            reload=False,
+            reload=True,  # Auto-reload on file changes
         )
 
 
