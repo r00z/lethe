@@ -66,26 +66,26 @@ class ConsoleUI:
                 with ui.row().classes("items-center gap-4 w-full"):
                     ui.label("🧠 Lethe Console").classes("text-subtitle1 font-medium text-slate-700")
                     ui.space()
-                    self.status_chip = ui.chip("idle", icon="circle", color="green").props("dense")
+                    self.status_chip = ui.chip("idle", icon="circle", color="light-green").props("dense")
                     self.stats_label = ui.label("").classes("text-sm text-slate-600")
             
             # Main layout - 3 columns (flex, no wrap)
             with ui.element("div").classes("flex flex-nowrap w-full h-screen bg-white"):
                 # Messages column - 30%
                 with ui.element("div").classes("w-[30%] min-w-0 h-full border-r border-gray-200 overflow-y-auto flex-shrink-0"):
-                    ui.label("💬 Messages").classes("text-h6 p-2 sticky top-0 bg-blue-50 z-10 border-b border-gray-200")
+                    ui.label("💬 Messages").classes("text-subtitle1 font-medium px-3 py-2 sticky top-0 bg-slate-200 z-10 border-b border-gray-300")
                     self.messages_container = ui.column().classes("w-full p-2 gap-1")
                 
                 # Memory column - 20%
                 with ui.element("div").classes("w-[20%] min-w-0 h-full border-r border-gray-200 overflow-y-auto flex-shrink-0"):
-                    ui.label("🧠 Memory").classes("text-h6 p-2 sticky top-0 bg-purple-50 z-10 border-b border-gray-200")
+                    ui.label("🧠 Memory").classes("text-subtitle1 font-medium px-3 py-2 sticky top-0 bg-slate-200 z-10 border-b border-gray-300")
                     self.blocks_container = ui.column().classes("w-full p-2")
                 
                 # Context column - 50%
                 with ui.element("div").classes("w-[50%] min-w-0 h-full overflow-y-auto flex-shrink-0"):
-                    with ui.row().classes("w-full items-center p-2 sticky top-0 bg-slate-50 z-10 border-b border-gray-200"):
-                        ui.label("📤 Context").classes("text-h6")
-                        self.context_info = ui.chip("", icon="token").classes("ml-4")
+                    with ui.row().classes("w-full items-center px-3 py-2 sticky top-0 bg-slate-200 z-10 border-b border-gray-300"):
+                        ui.label("📤 Context").classes("text-subtitle1 font-medium")
+                        self.context_info = ui.chip("", icon="token").props("dense").classes("ml-4")
                     self.context_container = ui.column().classes("w-full p-2 gap-1")
             
             # Initial data load
