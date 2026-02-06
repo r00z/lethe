@@ -68,25 +68,22 @@ class ConsoleUI:
                 self.status_chip = ui.chip("idle", icon="circle", color="green").classes("text-white")
                 self.stats_label = ui.label("").classes("text-white ml-4")
             
-            # Main layout - tabs
-            with ui.tabs().classes("w-full") as tabs:
-                messages_tab = ui.tab("Messages", icon="chat")
-                memory_tab = ui.tab("Memory", icon="psychology")
-                context_tab = ui.tab("Context", icon="code")
-            
-            with ui.tab_panels(tabs, value=messages_tab).classes("w-full"):
-                # Messages panel
-                with ui.tab_panel(messages_tab):
+            # Main layout - 3 columns
+            with ui.row().classes("w-full h-screen"):
+                # Messages column - 30%
+                with ui.column().classes("w-[30%] h-full border-r border-gray-700 overflow-y-auto"):
+                    ui.label("💬 Messages").classes("text-h6 p-2 sticky top-0 bg-gray-900 z-10")
                     self.messages_container = ui.column().classes("w-full p-2 gap-1")
                 
-                # Memory panel
-                with ui.tab_panel(memory_tab):
+                # Memory column - 20%
+                with ui.column().classes("w-[20%] h-full border-r border-gray-700 overflow-y-auto"):
+                    ui.label("🧠 Memory").classes("text-h6 p-2 sticky top-0 bg-gray-900 z-10")
                     self.blocks_container = ui.column().classes("w-full p-2")
                 
-                # Context panel
-                with ui.tab_panel(context_tab):
-                    with ui.row().classes("w-full items-center mb-2 p-2"):
-                        ui.label("Last context sent to LLM").classes("text-h6")
+                # Context column - 50%
+                with ui.column().classes("w-[50%] h-full overflow-y-auto"):
+                    with ui.row().classes("w-full items-center p-2 sticky top-0 bg-gray-900 z-10"):
+                        ui.label("📤 Context").classes("text-h6")
                         self.context_info = ui.chip("", icon="token").classes("ml-4")
                     self.context_container = ui.column().classes("w-full p-2 gap-1")
             
