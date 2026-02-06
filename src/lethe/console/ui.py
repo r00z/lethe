@@ -72,21 +72,24 @@ class ConsoleUI:
             # Main layout - 3 columns (flex, no wrap)
             with ui.element("div").classes("flex flex-nowrap w-full h-screen bg-white"):
                 # Messages column - 30%
-                with ui.element("div").classes("w-[30%] min-w-0 h-full border-r border-gray-200 overflow-y-auto flex-shrink-0"):
-                    ui.label("💬 Messages").classes("text-subtitle1 font-medium px-3 py-2 sticky top-0 bg-slate-200 z-10 border-b border-gray-300")
-                    self.messages_container = ui.column().classes("w-full p-2 gap-1")
+                with ui.element("div").classes("w-[30%] min-w-0 h-full border-r border-gray-200 flex-shrink-0 flex flex-col"):
+                    ui.label("💬 Messages").classes("text-subtitle1 font-medium px-3 py-2 bg-slate-200 border-b border-gray-300 flex-shrink-0")
+                    with ui.element("div").classes("flex-1 overflow-y-auto"):
+                        self.messages_container = ui.column().classes("w-full p-2 gap-1")
                 
                 # Memory column - 20%
-                with ui.element("div").classes("w-[20%] min-w-0 h-full border-r border-gray-200 overflow-y-auto flex-shrink-0"):
-                    ui.label("🧠 Memory").classes("text-subtitle1 font-medium px-3 py-2 sticky top-0 bg-slate-200 z-10 border-b border-gray-300")
-                    self.blocks_container = ui.column().classes("w-full p-2")
+                with ui.element("div").classes("w-[20%] min-w-0 h-full border-r border-gray-200 flex-shrink-0 flex flex-col"):
+                    ui.label("🧠 Memory").classes("text-subtitle1 font-medium px-3 py-2 bg-slate-200 border-b border-gray-300 flex-shrink-0")
+                    with ui.element("div").classes("flex-1 overflow-y-auto"):
+                        self.blocks_container = ui.column().classes("w-full p-2")
                 
                 # Context column - 50%
-                with ui.element("div").classes("w-[50%] min-w-0 h-full overflow-y-auto flex-shrink-0"):
-                    with ui.row().classes("w-full items-center px-3 py-2 sticky top-0 bg-slate-200 z-10 border-b border-gray-300"):
+                with ui.element("div").classes("w-[50%] min-w-0 h-full flex-shrink-0 flex flex-col"):
+                    with ui.row().classes("w-full items-center px-3 py-2 bg-slate-200 border-b border-gray-300 flex-shrink-0"):
                         ui.label("📤 Context").classes("text-subtitle1 font-medium")
                         self.context_info = ui.chip("", icon="token").props("dense").classes("ml-4")
-                    self.context_container = ui.column().classes("w-full p-2 gap-1")
+                    with ui.element("div").classes("flex-1 overflow-y-auto"):
+                        self.context_container = ui.column().classes("w-full p-2 gap-1")
             
             # Initial data load
             self._load_initial_data()
