@@ -484,9 +484,28 @@ class ContextWindow:
         # Keep only last 2 images, replace older ones with placeholders
         old_image_indices = set(image_indices[:-2]) if len(image_indices) > 2 else set()
         
+        # Find heartbeat messages (keep only the last one)
+        heartbeat_indices = []
+        for i, msg in enumerate(self.messages):
+            if msg.role == "user" and isinstance(msg.content, str):
+                if msg.content.startswith("[System Heartbeat"):
+                    heartbeat_indices.append(i)
+        # Skip all but the last heartbeat (and its response)
+        old_heartbeat_indices = set(heartbeat_indices[:-1]) if len(heartbeat_indices) > 1 else set()
+        
         # Build message array with timestamps on user messages only
         # (Assistant sees when user said things, but doesn't mimic timestamp format)
+        skip_next_assistant = False
         for i, msg in enumerate(self.messages):
+            # Skip old heartbeats and their responses
+            if i in old_heartbeat_indices:
+                skip_next_assistant = True
+                continue
+            if skip_next_assistant and msg.role == "assistant":
+                skip_next_assistant = False
+                continue
+            skip_next_assistant = False
+            
             content = msg.content
             
             # Replace old images with placeholder text
