@@ -103,14 +103,11 @@ async def run():
         lethe_console.update_model_info(settings.llm_model, settings.llm_model_aux)
         
         # Hook into agent for state updates
-        def on_context_build(ctx, tokens):
-            lethe_console.update_context(ctx, tokens)
-            lethe_console.track_tokens(tokens)
-        
         agent.set_console_hooks(
-            on_context_build=on_context_build,
+            on_context_build=lambda ctx, tokens: lethe_console.update_context(ctx, tokens),
             on_status_change=lambda status, tool: lethe_console.update_status(status, tool),
             on_memory_change=lambda blocks: lethe_console.update_memory_blocks(blocks),
+            on_token_usage=lambda tokens: lethe_console.track_tokens(tokens),
         )
 
     # Initialize conversation manager

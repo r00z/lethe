@@ -102,7 +102,7 @@ CSS = """
     @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
     
     /* Columns */
-    .mc-columns { display: flex; flex: 1; min-height: 0; }
+    .mc-columns { display: flex; flex: 1; min-height: 0; overflow: hidden; }
     .mc-panel { display: flex; flex-direction: column; min-width: 0; border-right: 1px solid #1e2d3d; }
     .mc-panel:last-child { border-right: none; }
     .mc-panel-header {

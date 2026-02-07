@@ -517,18 +517,14 @@ Summary:"""
         on_context_build: Optional[Callable] = None,
         on_status_change: Optional[Callable] = None,
         on_memory_change: Optional[Callable] = None,
+        on_token_usage: Optional[Callable] = None,
     ):
-        """Set callbacks for console state updates.
-        
-        Args:
-            on_context_build: Called with (context, tokens) when context is built
-            on_status_change: Called with (status, tool) when status changes
-            on_memory_change: Called with (blocks) when memory changes
-        """
+        """Set callbacks for console state updates."""
         self._console_hooks = {
             "on_context_build": on_context_build,
             "on_status_change": on_status_change,
             "on_memory_change": on_memory_change,
+            "on_token_usage": on_token_usage,
         }
         # Pass hooks to LLM client
-        self.llm.set_console_hooks(on_context_build, on_status_change)
+        self.llm.set_console_hooks(on_context_build, on_status_change, on_token_usage)

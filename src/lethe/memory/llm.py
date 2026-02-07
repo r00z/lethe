@@ -654,10 +654,12 @@ class AsyncLLMClient:
         self,
         on_context_build: Optional[Callable] = None,
         on_status_change: Optional[Callable] = None,
+        on_token_usage: Optional[Callable] = None,
     ):
         """Set callbacks for console state updates."""
         self._on_context_build = on_context_build
         self._on_status_change = on_status_change
+        self._on_token_usage = on_token_usage
     
     def _notify_status(self, status: str, tool: Optional[str] = None):
         """Notify console of status change."""
@@ -668,6 +670,14 @@ class AsyncLLMClient:
         """Notify console of context build."""
         if hasattr(self, "_on_context_build") and self._on_context_build:
             self._on_context_build(context, tokens)
+    
+    def _track_usage(self, result: Dict):
+        """Track token usage from API response."""
+        if hasattr(self, "_on_token_usage") and self._on_token_usage:
+            usage = result.get("usage", {})
+            total = usage.get("total_tokens", 0)
+            if total:
+                self._on_token_usage(total)
     
     def load_messages(self, messages: List[dict]):
         """Load existing messages from history into context.
@@ -927,7 +937,9 @@ class AsyncLLMClient:
         
         logger.debug(f"API call: {len(messages)} messages, {len(self.tools)} tools")
         
-        return await self._call_with_retry(kwargs, "chat")
+        result = await self._call_with_retry(kwargs, "chat")
+        self._track_usage(result)
+        return result
     
     async def _call_api_no_tools(self) -> Dict:
         """Make API call without tools (for final response after hitting limit)."""
@@ -938,7 +950,9 @@ class AsyncLLMClient:
         
         logger.debug(f"API call (no tools): {len(messages)} messages")
         
-        return await self._call_with_retry(kwargs, "chat_no_tools")
+        result = await self._call_with_retry(kwargs, "chat_no_tools")
+        self._track_usage(result)
+        return result
     
     async def complete(self, prompt: str, use_aux: bool = False) -> str:
         """Simple completion without tools or context management.
