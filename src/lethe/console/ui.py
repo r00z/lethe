@@ -1,6 +1,5 @@
-"""NiceGUI-based console UI."""
+"""NiceGUI-based console UI — Mission Control style."""
 
-import asyncio
 import json
 import logging
 from datetime import datetime
@@ -8,288 +7,345 @@ from typing import Optional
 
 from nicegui import ui, app
 
-from . import get_state, ConsoleState
+from . import get_state
 
 logger = logging.getLogger(__name__)
 
-# Refresh interval in seconds
 REFRESH_INTERVAL = 2.0
 
-# Role colors and styling (light theme)
-ROLE_STYLES = {
-    "user": {"bg": "bg-blue-50", "border": "border-blue-400", "icon": "person"},
-    "assistant": {"bg": "bg-emerald-50", "border": "border-emerald-400", "icon": "smart_toy"},
-    "tool": {"bg": "bg-amber-50", "border": "border-amber-400", "icon": "build"},
-    "system": {"bg": "bg-slate-100", "border": "border-slate-400", "icon": "settings"},
+# Role styling
+ROLES = {
+    "user":      {"color": "#3b82f6", "bg": "rgba(59,130,246,0.08)", "icon": "person",    "label": "USER"},
+    "assistant": {"color": "#00d4aa", "bg": "rgba(0,212,170,0.08)",  "icon": "smart_toy", "label": "ASSISTANT"},
+    "tool":      {"color": "#f59e0b", "bg": "rgba(245,158,11,0.08)", "icon": "build",     "label": "TOOL"},
+    "system":    {"color": "#64748b", "bg": "rgba(100,116,139,0.1)", "icon": "settings",  "label": "SYSTEM"},
 }
+
+CSS = """
+<style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 0; overflow: hidden; background: #0f1419; font-family: 'Inter', -apple-system, sans-serif; }
+    
+    .mc-root { display: flex; flex-direction: column; width: 100vw; height: 100vh; background: #0f1419; color: #e2e8f0; }
+    
+    /* Header */
+    .mc-header {
+        display: flex; align-items: center; gap: 16px;
+        padding: 6px 16px; background: #111820;
+        border-bottom: 1px solid #1e2d3d; flex-shrink: 0; min-height: 36px;
+    }
+    .mc-title { font-size: 13px; font-weight: 600; color: #00d4aa; letter-spacing: 2px; text-transform: uppercase; }
+    .mc-stat { font-size: 11px; color: #64748b; font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+    .mc-stat b { color: #94a3b8; font-weight: 500; }
+    
+    /* Status dot */
+    .mc-status { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #94a3b8; font-family: monospace; }
+    .mc-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .mc-dot-idle { background: #22c55e; }
+    .mc-dot-thinking { background: #3b82f6; animation: pulse 1.2s infinite; }
+    .mc-dot-tool_call { background: #f59e0b; animation: pulse 0.8s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+    
+    /* Columns */
+    .mc-columns { display: flex; flex: 1; min-height: 0; }
+    .mc-panel { display: flex; flex-direction: column; min-width: 0; border-right: 1px solid #1e2d3d; }
+    .mc-panel:last-child { border-right: none; }
+    .mc-panel-header {
+        padding: 8px 12px; font-size: 10px; font-weight: 600; letter-spacing: 1.5px;
+        text-transform: uppercase; color: #64748b; background: #111820;
+        border-bottom: 1px solid #1e2d3d; flex-shrink: 0;
+        display: flex; align-items: center; gap: 8px;
+    }
+    .mc-panel-header .accent { color: #00d4aa; }
+    .mc-panel-content { flex: 1; overflow-y: auto; padding: 8px; }
+    .mc-panel-content::-webkit-scrollbar { width: 4px; }
+    .mc-panel-content::-webkit-scrollbar-track { background: transparent; }
+    .mc-panel-content::-webkit-scrollbar-thumb { background: #2d3f52; border-radius: 2px; }
+    
+    /* Message cards */
+    .mc-msg {
+        border-left: 2px solid; padding: 6px 10px; margin-bottom: 4px;
+        border-radius: 2px; font-size: 12px;
+    }
+    .mc-msg-header { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+    .mc-msg-role { font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+    .mc-msg-time { font-size: 9px; color: #475569; margin-left: auto; font-family: monospace; }
+    .mc-msg-chip { font-size: 9px; padding: 1px 6px; border-radius: 3px; font-weight: 500; }
+    .mc-msg pre {
+        white-space: pre-wrap; word-wrap: break-word;
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        font-size: 11px; margin: 4px 0 0 0; padding: 0; color: #cbd5e1; line-height: 1.5;
+    }
+    
+    /* Memory blocks */
+    .mc-block { margin-bottom: 4px; }
+    .mc-block-header {
+        display: flex; align-items: center; gap: 6px; padding: 6px 8px;
+        cursor: pointer; border-radius: 3px; font-size: 11px; color: #94a3b8;
+        transition: background 0.15s;
+    }
+    .mc-block-header:hover { background: rgba(0,212,170,0.05); }
+    .mc-block-arrow { font-size: 10px; color: #475569; transition: transform 0.2s; width: 12px; }
+    .mc-block-label { font-weight: 600; color: #e2e8f0; }
+    .mc-block-meta { font-size: 9px; color: #475569; margin-left: auto; font-family: monospace; }
+    .mc-block-body {
+        padding: 4px 8px 8px 26px; display: none;
+    }
+    .mc-block-body.open { display: block; }
+    .mc-block-body pre {
+        white-space: pre-wrap; word-wrap: break-word;
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        font-size: 10px; color: #94a3b8; margin: 0; line-height: 1.5;
+    }
+    .mc-block-desc { font-size: 10px; color: #475569; margin-bottom: 4px; font-style: italic; }
+    
+    /* No data */
+    .mc-empty { color: #475569; font-size: 11px; padding: 16px; text-align: center; }
+</style>
+<script>
+function toggleBlock(id) {
+    const el = document.getElementById(id);
+    const arrow = document.getElementById('arrow-' + id);
+    if (el) {
+        el.classList.toggle('open');
+        if (arrow) arrow.textContent = el.classList.contains('open') ? '▾' : '▸';
+    }
+}
+</script>
+"""
+
+def _esc(text):
+    """Escape HTML."""
+    if not isinstance(text, str):
+        text = str(text)
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 class ConsoleUI:
-    """Mind state visualization console."""
     
     def __init__(self, port: int = 8080):
         self.port = port
-        self._last_context_time = None
-        self._last_message_count = 0
         self._last_version = 0
+        self._block_counter = 0
         self._setup_ui()
     
     def _setup_ui(self):
-        """Set up the UI layout."""
-        
         @ui.page("/")
         async def main_page():
-            state = get_state()
+            ui.dark_mode().enable()
+            ui.add_head_html('<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">')
+            ui.add_head_html(CSS)
             
-            # Light theme
-            ui.dark_mode().disable()
-            
-            # Custom CSS
-            ui.add_head_html('''
-            <style>
-                .message-block, .context-block { 
-                    border-left: 3px solid; 
-                    padding: 8px 12px; 
-                    margin: 4px 0;
-                    border-radius: 4px;
-                }
-                .content-full {
-                    white-space: pre-wrap;
-                    word-wrap: break-word;
-                    font-family: monospace;
-                    font-size: 11px;
-                    margin: 8px 0 0 0;
-                    padding: 0;
-                }
-            </style>
-            ''')
-            
-            # Header - compact
-            with ui.header().classes("bg-slate-100 border-b border-gray-200 py-1 min-h-0"):
-                with ui.row().classes("items-center gap-4 w-full"):
-                    ui.label("🧠 Lethe Console").classes("text-subtitle1 font-medium text-slate-700")
-                    ui.space()
-                    self.status_chip = ui.chip("idle", icon="circle", color="light-green").props("dense")
-                    self.stats_label = ui.label("").classes("text-sm text-slate-600")
-            
-            # Main layout - 3 columns (flex, no wrap)
-            # Use calc to subtract header height
-            with ui.element("div").classes("flex flex-nowrap w-full bg-white").style("height: calc(100vh - 40px)"):
-                # Messages column - 30%
-                with ui.element("div").classes("w-[30%] min-w-0 h-full border-r border-gray-200 flex-shrink-0 flex flex-col"):
-                    ui.label("💬 Messages").classes("text-subtitle1 font-medium px-3 py-2 bg-slate-200 border-b border-gray-300 flex-shrink-0")
-                    self.messages_scroll = ui.element("div").classes("flex-1 overflow-y-auto")
-                    with self.messages_scroll:
-                        self.messages_container = ui.column().classes("w-full p-2 gap-1")
+            # Root container
+            with ui.element("div").classes("mc-root"):
+                # Header
+                with ui.element("div").classes("mc-header"):
+                    ui.html('<span class="mc-title">◉ Lethe Console</span>')
+                    ui.html('<span style="flex:1"></span>')
+                    self.status_html = ui.html(self._render_status("idle", None))
+                    self.stats_html = ui.html(self._render_stats(0, 0, 0, 0))
                 
-                # Memory column - 20%
-                with ui.element("div").classes("w-[20%] min-w-0 h-full border-r border-gray-200 flex-shrink-0 flex flex-col"):
-                    ui.label("🧠 Memory").classes("text-subtitle1 font-medium px-3 py-2 bg-slate-200 border-b border-gray-300 flex-shrink-0")
-                    with ui.element("div").classes("flex-1 overflow-y-auto"):
-                        self.blocks_container = ui.column().classes("w-full p-2")
-                
-                # Context column - 50%
-                with ui.element("div").classes("w-[50%] min-w-0 h-full flex-shrink-0 flex flex-col"):
-                    with ui.row().classes("w-full items-center px-3 py-2 bg-slate-200 border-b border-gray-300 flex-shrink-0"):
-                        ui.label("📤 Context").classes("text-subtitle1 font-medium")
-                        self.context_info = ui.chip("", icon="token").props("dense").classes("ml-4")
-                    self.context_scroll = ui.element("div").classes("flex-1 overflow-y-auto")
-                    with self.context_scroll:
-                        self.context_container = ui.column().classes("w-full p-2 gap-1")
+                # Columns
+                with ui.element("div").classes("mc-columns"):
+                    # Messages — 30%
+                    with ui.element("div").classes("mc-panel").style("width: 30%"):
+                        ui.html('<div class="mc-panel-header"><span class="accent">◆</span> Messages</div>')
+                        self.msg_scroll = ui.element("div").classes("mc-panel-content")
+                        with self.msg_scroll:
+                            self.msg_container = ui.element("div")
+                    
+                    # Memory — 20%
+                    with ui.element("div").classes("mc-panel").style("width: 20%"):
+                        ui.html('<div class="mc-panel-header"><span class="accent">◆</span> Memory</div>')
+                        with ui.element("div").classes("mc-panel-content"):
+                            self.mem_container = ui.element("div")
+                    
+                    # Context — 50%
+                    with ui.element("div").classes("mc-panel").style("width: 50%"):
+                        with ui.element("div").classes("mc-panel-header"):
+                            ui.html('<span class="accent">◆</span> Context')
+                            ui.html('<span style="flex:1"></span>')
+                            self.ctx_info = ui.html('<span class="mc-stat"></span>')
+                        self.ctx_scroll = ui.element("div").classes("mc-panel-content")
+                        with self.ctx_scroll:
+                            self.ctx_container = ui.element("div")
             
-            # Initial data load
-            self._load_initial_data()
+            # Load data
+            self._full_rebuild()
             self._last_version = get_state().version
             
-            # Scroll to bottom after initial render
+            # Scroll to bottom
             ui.timer(0.5, lambda: (
-                self._scroll_to_bottom(self.messages_scroll),
-                self._scroll_to_bottom(self.context_scroll),
+                self._scroll_bottom(self.msg_scroll),
+                self._scroll_bottom(self.ctx_scroll),
             ), once=True)
             
-            # Start refresh timer
-            ui.timer(REFRESH_INTERVAL, self._refresh_ui)
+            ui.timer(REFRESH_INTERVAL, self._refresh)
     
-    def _render_message(self, container, role: str, content: str, timestamp: str = None):
-        """Render a single message block."""
-        style = ROLE_STYLES.get(role, ROLE_STYLES["system"])
-        
-        display_content = content if isinstance(content, str) else str(content)
-        
-        with container:
-            with ui.card().classes(f"w-full {style['bg']} message-block {style['border']}"):
-                with ui.row().classes("items-center gap-2"):
-                    ui.icon(style["icon"]).classes("text-lg")
-                    ui.label(role.upper()).classes("font-bold text-sm")
-                    if timestamp:
-                        ui.label(timestamp).classes("text-xs text-gray-400 ml-auto")
-                ui.html(f"<pre class='content-full'>{display_content}</pre>")
+    # ── Rendering ─────────────────────────────────────────────
     
-    def _render_context_message(self, container, msg: dict):
-        """Render a context message block."""
+    def _render_status(self, status, tool):
+        dot_cls = f"mc-dot mc-dot-{status}"
+        label = status
+        if tool:
+            label = f"{status}: {tool}"
+        return f'<span class="mc-status"><span class="{dot_cls}"></span>{_esc(label)}</span>'
+    
+    def _render_stats(self, msgs, total, archival, tokens):
+        parts = [
+            f'<b>{msgs}</b> msgs',
+            f'<b>{total}</b> history',
+            f'<b>{archival}</b> archival',
+        ]
+        if tokens:
+            parts.append(f'<b>{tokens:,}</b> tok')
+        return '<span class="mc-stat">' + ' │ '.join(parts) + '</span>'
+    
+    def _render_message_html(self, role, content, timestamp=None):
+        r = ROLES.get(role, ROLES["system"])
+        time_html = f'<span class="mc-msg-time">{_esc(timestamp)}</span>' if timestamp else ''
+        return f'''<div class="mc-msg" style="border-color:{r['color']};background:{r['bg']}">
+            <div class="mc-msg-header">
+                <span class="mc-msg-role" style="color:{r['color']}">{r['label']}</span>
+                {time_html}
+            </div>
+            <pre>{_esc(content)}</pre>
+        </div>'''
+    
+    def _render_context_msg_html(self, msg):
         role = msg.get("role", "unknown")
         content = msg.get("content", "")
-        style = ROLE_STYLES.get(role, ROLE_STYLES["system"])
+        r = ROLES.get(role, ROLES["system"])
         
-        # Handle different content types
+        # Extract text from content blocks
         if isinstance(content, list):
-            # System message with content blocks - extract text
             parts = []
             for block in content:
                 if isinstance(block, dict) and block.get("type") == "text":
                     parts.append(block.get("text", ""))
-            content_display = "\n---\n".join(parts) if parts else f"[{len(content)} content blocks]"
-        elif isinstance(content, str):
-            content_display = content
-        else:
-            content_display = str(content)
+            content = "\n---\n".join(parts) if parts else f"[{len(content)} content blocks]"
         
-        with container:
-            with ui.card().classes(f"w-full {style['bg']} context-block {style['border']}"):
-                with ui.row().classes("items-center gap-2"):
-                    ui.icon(style["icon"]).classes("text-lg")
-                    ui.label(role.upper()).classes("font-bold text-sm")
-                    if msg.get("tool_calls"):
-                        ui.chip(f"{len(msg['tool_calls'])} tools", icon="build", color="yellow").classes("ml-2")
-                    if msg.get("tool_call_id"):
-                        ui.chip("result", icon="check", color="orange").classes("ml-2")
-                ui.html(f"<pre class='content-full'>{content_display}</pre>")
+        # Chips for tool info
+        chips = ""
+        if msg.get("tool_calls"):
+            chips += f'<span class="mc-msg-chip" style="background:rgba(245,158,11,0.15);color:#f59e0b">{len(msg["tool_calls"])} tools</span>'
+        if msg.get("tool_call_id"):
+            chips += '<span class="mc-msg-chip" style="background:rgba(245,158,11,0.15);color:#f59e0b">result</span>'
+        
+        return f'''<div class="mc-msg" style="border-color:{r['color']};background:{r['bg']}">
+            <div class="mc-msg-header">
+                <span class="mc-msg-role" style="color:{r['color']}">{r['label']}</span>
+                {chips}
+            </div>
+            <pre>{_esc(str(content))}</pre>
+        </div>'''
     
-    def _load_initial_data(self):
-        """Load initial data into UI."""
+    def _render_block_html(self, label, value, description="", chars=0, limit=20000):
+        self._block_counter += 1
+        bid = f"block-{self._block_counter}"
+        
+        desc_html = f'<div class="mc-block-desc">{_esc(description)}</div>' if description else ''
+        
+        return f'''<div class="mc-block">
+            <div class="mc-block-header" onclick="toggleBlock('{bid}')">
+                <span class="mc-block-arrow" id="arrow-{bid}">▸</span>
+                <span class="mc-block-label">{_esc(label)}</span>
+                <span class="mc-block-meta">{chars:,}/{limit:,}</span>
+            </div>
+            <div class="mc-block-body" id="{bid}">
+                {desc_html}
+                <pre>{_esc(value[:5000])}</pre>
+            </div>
+        </div>'''
+    
+    # ── Data loading ──────────────────────────────────────────
+    
+    def _full_rebuild(self):
         state = get_state()
         
-        # Render messages (chronological - oldest first, newest at bottom)
-        self.messages_container.clear()
-        for msg in state.messages[-30:]:
-            self._render_message(
-                self.messages_container,
-                msg.get("role", "?"),
-                msg.get("content", ""),
-                msg.get("timestamp")
-            )
+        # Messages
+        msg_html = []
+        for m in state.messages[-30:]:
+            msg_html.append(self._render_message_html(
+                m.get("role", "?"),
+                m.get("content", ""),
+                m.get("timestamp"),
+            ))
+        self.msg_container._props["innerHTML"] = "\n".join(msg_html) if msg_html else '<div class="mc-empty">No messages</div>'
+        self.msg_container.update()
         
-        # Build memory blocks
-        self._rebuild_blocks()
+        # Memory
+        mem_html = []
+        self._block_counter = 0
+        if state.identity:
+            mem_html.append(self._render_block_html("identity", state.identity, "System prompt", len(state.identity), 20000))
+        if state.summary:
+            mem_html.append(self._render_block_html("summary", state.summary, "Conversation summary", len(state.summary), 10000))
+        for label, block in state.memory_blocks.items():
+            if label == "identity":
+                continue
+            mem_html.append(self._render_block_html(
+                label, block.get("value", ""),
+                block.get("description", ""),
+                len(block.get("value", "")),
+                block.get("limit", 20000),
+            ))
+        self.mem_container._props["innerHTML"] = "\n".join(mem_html) if mem_html else '<div class="mc-empty">No memory blocks</div>'
+        self.mem_container.update()
         
-        # Build context view
-        self._rebuild_context()
-    
-    def _rebuild_blocks(self):
-        """Rebuild memory blocks display."""
-        state = get_state()
-        self.blocks_container.clear()
-        
-        with self.blocks_container:
-            # Identity
-            if state.identity:
-                with ui.expansion("🎭 Identity (System Prompt)", icon="person").classes("w-full"):
-                    ui.html(f"<pre style='white-space:pre-wrap;font-size:11px;max-height:400px;overflow:auto'>{state.identity[:3000]}</pre>")
-            
-            # Summary
-            if state.summary:
-                with ui.expansion("📝 Conversation Summary", icon="summarize").classes("w-full"):
-                    ui.html(f"<pre style='white-space:pre-wrap;font-size:11px;max-height:300px;overflow:auto'>{state.summary[:2000]}</pre>")
-            
-            # Memory blocks
-            if state.memory_blocks:
-                ui.label("Memory Blocks").classes("text-h6 mt-4")
-                
-                for label, block in state.memory_blocks.items():
-                    if label == "identity":
-                        continue
-                    
-                    value = block.get("value", "")
-                    chars = len(value)
-                    limit = block.get("limit", 20000)
-                    description = block.get("description", "")
-                    
-                    # Icon based on block name
-                    icon = "memory"
-                    if "persona" in label or "capabil" in label:
-                        icon = "psychology"
-                    elif "human" in label:
-                        icon = "person"
-                    elif "project" in label:
-                        icon = "folder"
-                    elif "task" in label:
-                        icon = "checklist"
-                    elif "tool" in label:
-                        icon = "build"
-                    
-                    with ui.expansion(f"{label} ({chars:,}/{limit:,} chars)", icon=icon).classes("w-full"):
-                        if description:
-                            ui.label(description).classes("text-caption text-gray-400 mb-2")
-                        ui.html(f"<pre style='white-space:pre-wrap;font-size:11px;max-height:300px;overflow:auto'>{value[:4000]}</pre>")
-            
-            if not state.memory_blocks and not state.identity:
-                ui.label("No memory blocks loaded").classes("text-gray-500")
-    
-    def _rebuild_context(self):
-        """Rebuild context display."""
-        state = get_state()
-        self.context_container.clear()
-        
-        if not state.last_context:
-            with self.context_container:
-                ui.label("No context captured yet. Send a message to see the context.").classes("text-gray-500")
-            return
-        
-        with self.context_container:
+        # Context
+        ctx_html = []
+        if state.last_context:
             for msg in state.last_context:
-                self._render_context_message(self.context_container, msg)
-    
-    def _scroll_to_bottom(self, element):
-        """Scroll a container element to the bottom."""
-        ui.run_javascript(f'document.querySelector("[id=\\"c{element.id}\\"]").scrollTop = 999999;')
-    
-    def _refresh_ui(self):
-        """Refresh UI with current state.
+                ctx_html.append(self._render_context_msg_html(msg))
+        self.ctx_container._props["innerHTML"] = "\n".join(ctx_html) if ctx_html else '<div class="mc-empty">No context captured yet</div>'
+        self.ctx_container.update()
         
-        Updates labels every tick. Rebuilds panels only when data version changes.
-        """
-        state = get_state()
-        
-        # Update status chip (lightweight)
-        status_colors = {"idle": "green", "thinking": "blue", "tool_call": "orange"}
-        self.status_chip.text = state.status
-        if state.current_tool:
-            self.status_chip.text = f"{state.status}: {state.current_tool}"
-        self.status_chip._props["color"] = status_colors.get(state.status, "gray")
-        self.status_chip.update()
-        
-        # Update stats label (lightweight)
-        self.stats_label.text = f"Messages: {len(state.messages)} | History: {state.total_messages} | Archival: {state.archival_count}"
-        
-        # Update context token info (lightweight)
+        # Context info
         if state.last_context_time:
             time_str = state.last_context_time.strftime("%H:%M:%S")
-            self.context_info.text = f"{state.last_context_tokens:,} tokens @ {time_str}"
-            self.context_info.update()
+            self.ctx_info._props["innerHTML"] = f'<span class="mc-stat"><b>{state.last_context_tokens:,}</b> tokens @ {time_str}</span>'
+            self.ctx_info.update()
         
-        # Rebuild panels only if data changed
+        # Stats
+        self.stats_html._props["innerHTML"] = self._render_stats(
+            len(state.messages), state.total_messages, state.archival_count,
+            state.last_context_tokens,
+        )
+        self.stats_html.update()
+    
+    def _scroll_bottom(self, el):
+        ui.run_javascript(f'document.querySelector("[id=\\"c{el.id}\\"]").scrollTop = 999999;')
+    
+    # ── Refresh loop ──────────────────────────────────────────
+    
+    def _refresh(self):
+        state = get_state()
+        
+        # Always update status (lightweight)
+        self.status_html._props["innerHTML"] = self._render_status(state.status, state.current_tool)
+        self.status_html.update()
+        
+        # Rebuild only on data change
         if state.version != self._last_version:
             self._last_version = state.version
-            self._load_initial_data()
-            self._scroll_to_bottom(self.messages_scroll)
-            self._scroll_to_bottom(self.context_scroll)
+            self._full_rebuild()
+            self._scroll_bottom(self.msg_scroll)
+            self._scroll_bottom(self.ctx_scroll)
     
     def run(self):
-        """Run the console server."""
         logger.info(f"Starting Lethe Console on port {self.port}")
         ui.run(
             port=self.port,
             title="Lethe Console",
             favicon="🧠",
             show=False,
-            reload=False,  # Can't use reload in background thread
+            reload=False,
         )
 
 
 async def run_console(port: int = 8080):
-    """Run console in background."""
     console = ConsoleUI(port=port)
     import threading
-    thread = threading.Thread(target=console.run, daemon=True)
-    thread.start()
+    threading.Thread(target=console.run, daemon=True).start()
     logger.info(f"Lethe Console started on http://localhost:{port}")
