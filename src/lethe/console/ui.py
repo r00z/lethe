@@ -31,6 +31,7 @@ class ConsoleUI:
         self.port = port
         self._last_context_time = None
         self._last_message_count = 0
+        self._last_version = 0
         self._setup_ui()
     
     def _setup_ui(self):
@@ -67,6 +68,10 @@ class ConsoleUI:
             with ui.header().classes("bg-slate-100 border-b border-gray-200 py-1 min-h-0"):
                 with ui.row().classes("items-center gap-4 w-full"):
                     ui.label("🧠 Lethe Console").classes("text-subtitle1 font-medium text-slate-700")
+                    self.update_banner = ui.button(
+                        "🔄 New data available — click to refresh",
+                        on_click=self._do_full_rebuild,
+                    ).props("flat dense").classes("text-blue-600 text-xs hidden")
                     ui.space()
                     self.status_chip = ui.chip("idle", icon="circle", color="light-green").props("dense")
                     self.stats_label = ui.label("").classes("text-sm text-slate-600")
@@ -229,10 +234,14 @@ class ConsoleUI:
                 self._render_context_message(self.context_container, msg)
     
     def _refresh_ui(self):
-        """Refresh UI with current state."""
+        """Refresh UI with current state.
+        
+        Only updates labels/chips on every tick. 
+        Full panel rebuilds only happen when data actually changes.
+        """
         state = get_state()
         
-        # Update status chip
+        # Update status chip (lightweight, no DOM rebuild)
         status_colors = {"idle": "green", "thinking": "blue", "tool_call": "orange"}
         self.status_chip.text = state.status
         if state.current_tool:
@@ -240,24 +249,33 @@ class ConsoleUI:
         self.status_chip._props["color"] = status_colors.get(state.status, "gray")
         self.status_chip.update()
         
-        # Update stats
+        # Update stats label (lightweight)
         self.stats_label.text = f"Messages: {len(state.messages)} | History: {state.total_messages} | Archival: {state.archival_count}"
         
-        # Update context info and rebuild only if changed
+        # Update context token info (lightweight)
         if state.last_context_time:
             time_str = state.last_context_time.strftime("%H:%M:%S")
             self.context_info.text = f"{state.last_context_tokens:,} tokens @ {time_str}"
             self.context_info.update()
-            
-            # Only rebuild context if timestamp changed
-            if state.last_context and state.last_context_time != self._last_context_time:
-                self._rebuild_context()
-                self._last_context_time = state.last_context_time
         
-        # Only rebuild messages if count changed
-        if len(state.messages) != self._last_message_count:
-            self._load_initial_data()
-            self._last_message_count = len(state.messages)
+        # Show update banner if data version changed
+        if state.version != self._last_version:
+            self.update_banner.classes(remove="hidden")
+            self.update_banner.update()
+    
+    def _do_full_rebuild(self):
+        """Rebuild all panels (triggered by user click)."""
+        state = get_state()
+        self._last_version = state.version
+        self._last_message_count = len(state.messages)
+        self._last_context_time = state.last_context_time
+        
+        # Rebuild all panels
+        self._load_initial_data()
+        
+        # Hide banner
+        self.update_banner.classes(add="hidden")
+        self.update_banner.update()
     
     def run(self):
         """Run the console server."""

@@ -44,6 +44,9 @@ class ConsoleState:
     # Stats
     total_messages: int = 0
     archival_count: int = 0
+    
+    # Change tracking (incremented on data changes that need UI rebuild)
+    version: int = 0
 
 
 # Global state instance
@@ -98,6 +101,7 @@ def update_context(context: List[Dict], tokens: int):
     _state.last_context = context
     _state.last_context_tokens = tokens
     _state.last_context_time = datetime.now()
+    _state.version += 1
 
 
 def update_status(status: str, tool: Optional[str] = None):
