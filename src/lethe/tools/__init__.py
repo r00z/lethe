@@ -149,25 +149,21 @@ def get_all_tools() -> list[tuple[Callable, dict]]:
     """Get all available tools as (function, schema) tuples."""
     # Tools with optional name override (for async imports)
     tools = [
-        # CLI tools
+        # CLI
         (bash, None),
-        (bash_output, None),
-        (kill_bash, None),
         
         # File tools
         (read_file, None),
         (write_file, None),
         (edit_file, None),
         (list_directory, None),
-        (glob_search, None),
         (grep_search, None),
         
-        # Web search (optional - only if EXA_API_KEY is set)
+        # Web
         (web_search, None),
         (fetch_webpage, None),
         
-        # Telegram tools
-        (telegram_react, "telegram_react"),
+        # Telegram
         (telegram_send_message, "telegram_send_message"),
         (telegram_send_file, "telegram_send_file"),
     ]

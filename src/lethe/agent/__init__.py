@@ -467,10 +467,9 @@ Summary:"""
             
             return "\n".join(output)
         
-        # Add all memory tools
+        # Add memory tools (keep minimal — too many tools overwhelms some models)
         for func in [memory_read, memory_update, memory_append, 
-                     archival_search, archival_insert, conversation_search,
-                     send_image, view_image, list_tools]:
+                     archival_search, archival_insert, conversation_search]:
             self.llm.add_tool(func)
     
     def add_tool(self, func: Callable):
