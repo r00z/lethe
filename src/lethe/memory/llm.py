@@ -1217,7 +1217,7 @@ class AsyncLLMClient:
                     
                     if func:
                         try:
-                            import json
+                            import json, asyncio
                             args = json.loads(tool_call["function"]["arguments"])
                             if asyncio.iscoroutinefunction(func):
                                 tool_result = await func(**args)
