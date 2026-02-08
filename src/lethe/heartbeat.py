@@ -23,25 +23,36 @@ FULL_CONTEXT_INTERVAL = 2 * 60 * 60
 HEARTBEAT_MESSAGE = """[System Heartbeat - {timestamp}]
 
 {reminders}
-Review any pending items and report if anything needs attention NOW.
+Review pending items. If anything needs attention NOW, report it.
+
+Otherwise, briefly reflect:
+- Is there a question you should ask your principal next time you talk?
+- Any pattern you've noticed that could help them?
+- Anything worth noting in ~/lethe/questions.md?
+
+If you have a reflection, write it to ~/lethe/questions.md using your tools.
 
 End with either:
-- "ok" if nothing urgent
+- "ok" if nothing to report
 - A brief, actionable message if something needs user attention
 """
 
 HEARTBEAT_MESSAGE_FULL = """[System Heartbeat - {timestamp}]
 
-This is a full context check-in. Review your identity, current projects, and all pending items.
+This is a full context check-in with your complete identity and memory.
 
 {reminders}
-Consider:
-- Any tasks or reminders that need attention
-- Projects that need progress updates
-- Anything the user should know about
+Review and reflect:
+1. **Pending items** — tasks, reminders, deadlines approaching
+2. **Projects** — read ~/lethe/projects/ if needed. Any stalled? Any opportunities?
+3. **Your principal** — how are they doing? What do you know about their goals, health, relationships? What's missing?
+4. **Questions** — read ~/lethe/questions.md. Update it with new reflections, mark answered questions, add new ones.
+5. **Self-improvement** — anything about your own capabilities you should improve? Skills to write? Code to suggest?
+
+Take action: update questions.md, write notes, create reminders. Don't just think — do.
 
 End with either:
-- "ok" if nothing urgent  
+- "ok" if nothing to surface to user
 - A brief, actionable message if something needs user attention
 """
 

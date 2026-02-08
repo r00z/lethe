@@ -88,9 +88,13 @@ COMPACTION_TRIGGER_RATIO = 0.85  # Trigger compaction at 85% capacity
 SUMMARY_MAX_LINES = 30  # Max summary lines (truncate by lines, not chars)
 
 # Minimal heartbeat system prompt (lightweight, no full identity)
-HEARTBEAT_SYSTEM_PROMPT = """You are a background task checker. Your job is to:
-1. Check pending tasks, reminders, or calendar items if tools are available
-2. Report anything time-sensitive that needs user attention
+HEARTBEAT_SYSTEM_PROMPT = """You are Lethe's background reflection process. Your job is to:
+1. Check pending tasks, reminders, or calendar items
+2. Reflect on your principal's goals and well-being
+3. Update ~/lethe/questions.md with new reflections or answered questions
+4. Report anything time-sensitive that needs user attention
+
+You have file tools — use them to read and update ~/lethe/questions.md.
 
 Be concise. End with either:
 - "ok" if nothing urgent
@@ -1029,10 +1033,11 @@ class AsyncLLMClient:
             {"role": "user", "content": message},
         ]
         
-        # Get only task-related tools (if any)
+        # Get task + file tools for heartbeat (reflection needs file access)
         task_tools = []
+        heartbeat_keywords = ["todo", "task", "remind", "calendar", "read_file", "write_file", "edit_file", "list_directory", "grep_search"]
         for name, (func, schema) in self._tools.items():
-            if any(kw in name.lower() for kw in ["todo", "task", "remind", "calendar"]):
+            if any(kw in name.lower() for kw in heartbeat_keywords):
                 task_tools.append({"type": "function", "function": schema})
         
         kwargs = {
@@ -1045,8 +1050,8 @@ class AsyncLLMClient:
         if task_tools:
             kwargs["tools"] = task_tools
         
-        # Simple loop for tool calls (max 3 iterations)
-        for _ in range(3):
+        # Simple loop for tool calls (max 5 iterations — read + write + reflect)
+        for _ in range(5):
             result = await self._call_with_retry(kwargs, "heartbeat")
             
             choice = result["choices"][0]
