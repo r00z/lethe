@@ -525,6 +525,20 @@ class ContextWindow:
         # Skip all but the last heartbeat (and its response)
         old_heartbeat_indices = set(heartbeat_indices[:-1]) if len(heartbeat_indices) > 1 else set()
         
+        # Find the last tool_call group (assistant with tool_calls + its tool results)
+        # Only the last group gets full content; older tool results are truncated to metadata
+        last_tool_assistant_idx = None
+        for i in range(len(self.messages) - 1, -1, -1):
+            if self.messages[i].role == "assistant" and self.messages[i].tool_calls:
+                last_tool_assistant_idx = i
+                break
+        
+        # Collect tool_call_ids from the last tool group
+        last_tool_ids = set()
+        if last_tool_assistant_idx is not None:
+            for tc in self.messages[last_tool_assistant_idx].tool_calls:
+                last_tool_ids.add(tc.get("id", ""))
+        
         # Build message array with timestamps on user messages only
         # (Assistant sees when user said things, but doesn't mimic timestamp format)
         skip_next_assistant = False
@@ -551,6 +565,14 @@ class ContextWindow:
                             path = text.replace("[Image from ", "").replace("]", "").strip()
                             break
                 content = f"[Previously viewed image: {path}]"
+            
+            # Truncate old tool results to metadata only
+            # Keep full content only for the last tool_call group
+            if msg.role == "tool" and msg.tool_call_id and msg.tool_call_id not in last_tool_ids:
+                content_str = content if isinstance(content, str) else str(content)
+                if len(content_str) > 200:
+                    # Keep first 150 chars as preview
+                    content = f"[Tool result: {len(content_str)} chars]\n{content_str[:150]}..."
             
             if msg.role == "user" and not msg.tool_calls and isinstance(content, str):
                 timestamp = msg.format_timestamp()
