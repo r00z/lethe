@@ -16,10 +16,23 @@ from lethe.memory.llm import AsyncLLMClient, LLMConfig
 
 logger = logging.getLogger(__name__)
 
-# Actor tools that the butler uses — everything else goes to subagents
-ACTOR_TOOL_NAMES = {
+# Tools the butler keeps (actor + memory + telegram)
+# Everything else (file, CLI, web, browser) goes to subagents
+BUTLER_TOOL_NAMES = {
+    # Actor tools (added by actor system)
     'send_message', 'wait_for_response', 'discover_actors',
     'terminate', 'spawn_subagent', 'kill_actor', 'ping_actor',
+    # Memory tools (butler manages her own memory)
+    'memory_read', 'memory_update', 'memory_append',
+    'archival_search', 'archival_insert', 'conversation_search',
+    # Telegram tools (butler talks to user)
+    'telegram_send_message', 'telegram_send_file',
+}
+
+# Tools that ALL subagents always get (CLI + file are fundamental)
+SUBAGENT_DEFAULT_TOOLS = {
+    'bash', 'read_file', 'write_file', 'edit_file',
+    'list_directory', 'grep_search',
 }
 
 
@@ -50,14 +63,13 @@ class ActorSystem:
         # Collect all agent tools BEFORE stripping them
         self._collect_available_tools()
         
-        # Strip non-actor tools from butler's LLM
-        # Butler delegates all work — she only needs actor tools
+        # Strip tools butler doesn't need — she keeps memory + telegram
         if hasattr(self.agent, 'llm') and hasattr(self.agent.llm, '_tools'):
-            non_actor = [name for name in self.agent.llm._tools if name not in ACTOR_TOOL_NAMES]
-            for name in non_actor:
+            to_strip = [name for name in self.agent.llm._tools if name not in BUTLER_TOOL_NAMES]
+            for name in to_strip:
                 del self.agent.llm._tools[name]
-            if non_actor:
-                logger.info(f"Stripped {len(non_actor)} tools from butler (delegated to subagents)")
+            if to_strip:
+                logger.info(f"Stripped {len(to_strip)} tools from butler: {to_strip}")
         
         # Create principal actor
         self.principal = self.registry.spawn(
@@ -86,6 +98,12 @@ class ActorSystem:
             return actor
         self.registry.spawn = spawn_and_start
         
+        # Rebuild tool reference in system prompt (was built before stripping)
+        if hasattr(self.agent, 'llm'):
+            self.agent.llm.context._tool_reference = self.agent.llm.context._build_tool_reference(self.agent.llm.tools)
+            self.agent.llm._update_tool_budget()
+            logger.info(f"Rebuilt tool reference ({len(self.agent.llm.context._tool_reference)} chars)")
+        
         tool_count = len(self.agent.llm._tools)
         available_count = len(self._available_tools)
         logger.info(
@@ -97,7 +115,7 @@ class ActorSystem:
         """Collect tools from the agent that subagents can request."""
         if hasattr(self.agent, 'llm') and hasattr(self.agent.llm, '_tools'):
             for name, (func, schema) in self.agent.llm._tools.items():
-                if name not in ACTOR_TOOL_NAMES:
+                if name not in BUTLER_TOOL_NAMES:
                     self._available_tools[name] = (func, schema)
 
     def get_available_tool_names(self) -> List[str]:

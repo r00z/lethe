@@ -69,9 +69,19 @@ class ActorRunner:
             for func, _ in actor_tools:
                 llm.add_tool(func)
             
-            # Register requested tools from available pool
+            # Register default tools (CLI + file — always available)
+            from lethe.actor.integration import SUBAGENT_DEFAULT_TOOLS
             registered_tools = []
+            for tool_name in SUBAGENT_DEFAULT_TOOLS:
+                if tool_name in self.available_tools:
+                    func, schema = self.available_tools[tool_name]
+                    llm.add_tool(func, schema)
+                    registered_tools.append(tool_name)
+            
+            # Register additional requested tools
             for tool_name in actor.config.tools:
+                if tool_name in SUBAGENT_DEFAULT_TOOLS:
+                    continue  # Already registered
                 if tool_name in self.available_tools:
                     func, schema = self.available_tools[tool_name]
                     llm.add_tool(func, schema)
