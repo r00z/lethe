@@ -1,6 +1,6 @@
 # Lethe
 
-[![Release](https://img.shields.io/badge/release-v0.5.0-blue?style=flat-square)](https://github.com/atemerev/lethe/releases/tag/v0.5.0)
+[![Release](https://img.shields.io/badge/release-v0.6.0-blue?style=flat-square)](https://github.com/atemerev/lethe/releases/tag/v0.6.0)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-blue?style=flat-square&logo=python&logoColor=white)](https://python.org)
 [![Telegram](https://img.shields.io/badge/Telegram-bot-blue?style=flat-square&logo=telegram)](https://telegram.org)
@@ -98,7 +98,7 @@ curl -fsSL https://lethe.gg/update | bash
 | Provider | Env Variable | Default Model |
 |----------|--------------|---------------|
 | OpenRouter | `OPENROUTER_API_KEY` | `moonshotai/kimi-k2.5-0127` |
-| Anthropic | `ANTHROPIC_API_KEY` | `claude-opus-4-5-20251101` |
+| Anthropic | `ANTHROPIC_API_KEY` | `claude-opus-4-6` |
 | OpenAI | `OPENAI_API_KEY` | `gpt-5.2` |
 
 Set `LLM_PROVIDER` to force a specific provider, or let it auto-detect from available API keys.
