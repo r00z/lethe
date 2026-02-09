@@ -192,11 +192,17 @@ async def run():
     heartbeat_chat_id = int(allowed_ids.split(",")[0]) if allowed_ids else None
     
     async def heartbeat_process(message: str) -> str:
-        """Process heartbeat with minimal context and aux model."""
+        """Process heartbeat — triggers DMN round if actor system is active."""
+        if actor_system:
+            result = await actor_system.dmn_round()
+            return result or "ok"
         return await agent.heartbeat(message)
     
     async def heartbeat_full_context(message: str) -> str:
-        """Process heartbeat with full agent context (every 2 hours)."""
+        """Full context heartbeat — also triggers DMN round."""
+        if actor_system:
+            result = await actor_system.dmn_round()
+            return result or "ok"
         return await agent.chat(message, use_hippocampus=False)
     
     async def heartbeat_send(response: str):
@@ -238,6 +244,13 @@ async def run():
     
     # Set heartbeat trigger on telegram bot for /heartbeat command
     telegram_bot.heartbeat_callback = heartbeat.trigger
+    
+    # Wire DMN callbacks (send_to_user, get_reminders)
+    if actor_system:
+        actor_system.set_callbacks(
+            send_to_user=heartbeat_send,
+            get_reminders=get_active_reminders,
+        )
 
     # Set up shutdown handling
     shutdown_event = asyncio.Event()

@@ -2,7 +2,11 @@
 
 The butler (principal) is a pure coordinator — she NEVER calls tools herself.
 All work is delegated to subagents who have the actual tools.
-Butler only has actor tools: spawn, kill, send, discover, ping, wait, terminate.
+Butler only has actor tools + memory tools + telegram tools.
+
+The DMN (Default Mode Network) is a persistent background subagent that
+replaces heartbeats. It scans goals, reorganizes memory, self-improves,
+and notifies the butler when something needs user attention.
 """
 
 import asyncio
@@ -12,6 +16,7 @@ from typing import Callable, Dict, List, Optional
 from lethe.actor import Actor, ActorConfig, ActorRegistry, ActorState
 from lethe.actor.tools import create_actor_tools
 from lethe.actor.runner import ActorRunner
+from lethe.actor.dmn import DefaultModeNetwork
 from lethe.memory.llm import AsyncLLMClient, LLMConfig
 
 logger = logging.getLogger(__name__)
@@ -47,10 +52,15 @@ class ActorSystem:
         self.agent = agent
         self.registry = ActorRegistry()
         self.principal: Optional[Actor] = None
+        self.dmn: Optional[DefaultModeNetwork] = None
         self._background_tasks: Dict[str, asyncio.Task] = {}
         
         # Tools from the agent that subagents can use (not the butler)
         self._available_tools: Dict[str, tuple] = {}
+        
+        # Callbacks set by main.py
+        self._send_to_user: Optional[Callable] = None
+        self._get_reminders: Optional[Callable] = None
 
     async def setup(self):
         """Set up the actor system.
@@ -104,11 +114,21 @@ class ActorSystem:
             self.agent.llm._update_tool_budget()
             logger.info(f"Rebuilt tool reference ({len(self.agent.llm.context._tool_reference)} chars)")
         
+        # Initialize DMN (Default Mode Network) — persistent background thinker
+        self.dmn = DefaultModeNetwork(
+            registry=self.registry,
+            llm_factory=self._create_llm_for_actor,
+            available_tools=self._available_tools,
+            butler_id=self.principal.id,
+            send_to_user=self._send_to_user or (lambda msg: asyncio.sleep(0)),
+            get_reminders=self._get_reminders,
+        )
+        
         tool_count = len(self.agent.llm._tools)
         available_count = len(self._available_tools)
         logger.info(
             f"Actor system initialized. Principal: {self.principal.id}, "
-            f"butler tools: {tool_count}, subagent tools available: {available_count}"
+            f"butler tools: {tool_count}, subagent tools available: {available_count}, DMN ready"
         )
 
     def _collect_available_tools(self):
@@ -163,6 +183,33 @@ class ActorSystem:
         self._background_tasks[actor.id] = task
         actor._task = task
         logger.info(f"Started background actor: {actor.config.name} (id={actor.id})")
+
+    def set_callbacks(
+        self,
+        send_to_user: Callable,
+        get_reminders: Optional[Callable] = None,
+    ):
+        """Set callbacks for DMN and actor system.
+        
+        Args:
+            send_to_user: async Callable(message: str) -> None
+            get_reminders: async Callable() -> str
+        """
+        self._send_to_user = send_to_user
+        self._get_reminders = get_reminders
+        if self.dmn:
+            self.dmn.send_to_user = send_to_user
+            self.dmn.get_reminders = get_reminders
+
+    async def dmn_round(self) -> Optional[str]:
+        """Run a DMN round. Called by heartbeat timer.
+        
+        Returns:
+            Message to send to user, or None
+        """
+        if self.dmn is None:
+            return None
+        return await self.dmn.run_round()
 
     async def shutdown(self):
         """Shut down all actors gracefully."""
