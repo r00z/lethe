@@ -176,10 +176,9 @@ update_container() {
     
     # Check if container runtime is reachable
     if ! $container_cmd info &>/dev/null; then
-        error "$container_cmd daemon not reachable"
-        if [[ "$container_cmd" == "docker" ]] && [[ -n "$DOCKER_HOST" ]]; then
+        if [[ "$container_cmd" == "docker" ]] && [[ -n "${DOCKER_HOST:-}" ]]; then
             echo ""
-            echo "  DOCKER_HOST is set to: $DOCKER_HOST"
+            echo -e "${YELLOW}  DOCKER_HOST is set to: $DOCKER_HOST${NC}"
             echo "  This may be pointing to a non-running Docker Desktop"
             echo ""
             echo "  Try one of:"
@@ -189,7 +188,7 @@ update_container() {
             echo "    4. Run: sudo systemctl start docker"
             echo ""
         fi
-        exit 1
+        error "$container_cmd daemon not reachable"
     fi
     
     # Clone to temp directory
@@ -206,7 +205,11 @@ update_container() {
     
     info "Rebuilding container image..."
     cd "$tmp_dir"
-    $container_cmd build --load -t lethe:latest --label "version=$latest_version" .
+    if [[ "$container_cmd" == "podman" ]]; then
+        $container_cmd build -t lethe:latest --label "version=$latest_version" .
+    else
+        $container_cmd build --load -t lethe:latest --label "version=$latest_version" .
+    fi
     
     info "Starting container..."
     if [ ! -f "$config_file" ]; then
@@ -368,7 +371,7 @@ EOF
             echo ""
             success "Update complete! ($current_version → $latest_version)"
             echo ""
-            echo "  💡 If upgrading from v0.x to v1.0+, run the actor model migration:"
+            echo "  💡 If upgrading from v0.3.x to v0.6+, run the actor model migration:"
             echo "     cd $install_dir && uv run python scripts/migrate_to_actors.py"
             echo "     (rewrites identity.md and tools.md for multi-agent architecture)"
             ;;

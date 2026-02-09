@@ -743,9 +743,13 @@ setup_container() {
     mkdir -p "$WORKSPACE_DIR"
     chmod 777 "$WORKSPACE_DIR"
     
-    # Build image (--load required for Docker buildx to load into local daemon)
+    # Build image (--load needed for Docker buildx to load into local daemon)
     cd "$INSTALL_DIR"
-    $CONTAINER_CMD build --load -t lethe:latest .
+    if [[ "$CONTAINER_CMD" == "podman" ]]; then
+        $CONTAINER_CMD build -t lethe:latest .
+    else
+        $CONTAINER_CMD build --load -t lethe:latest .
+    fi
     
     # Create env file for container
     local key_name="${PROVIDER_KEYS[$SELECTED_PROVIDER]}"
@@ -758,6 +762,8 @@ LLM_MODEL=$SELECTED_MODEL
 LLM_MODEL_AUX=$SELECTED_MODEL_AUX
 LLM_API_BASE=$SELECTED_API_BASE
 $key_name=$API_KEY
+WORKSPACE_DIR=/workspace
+MEMORY_DIR=/workspace/data/memory
 ACTORS_ENABLED=true
 HEARTBEAT_ENABLED=true
 HIPPOCAMPUS_ENABLED=true
