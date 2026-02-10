@@ -88,22 +88,35 @@ class TelegramBot:
                 from lethe.actor import ActorState
                 actors = self.actor_system.registry.all_actors
                 
+                # Separate system actors (cortex, dmn) from user-spawned
+                system_names = {"cortex", "dmn"}
                 active = [a for a in actors if a.state in (ActorState.RUNNING, ActorState.INITIALIZING, ActorState.WAITING)]
-                terminated = [a for a in actors if a.state == ActorState.TERMINATED]
+                terminated = [a for a in actors if a.state == ActorState.TERMINATED and a.name not in system_names]
                 
-                lines.append(f"\nActors: {len(active)} active, {len(terminated)} terminated")
+                # DMN status: sleeping (between rounds) or running
+                dmn_active = any(a.name == "dmn" and a.state == ActorState.RUNNING for a in actors)
+                dmn_status = "🟢 running" if dmn_active else "💤 sleeping (wakes on heartbeat)"
                 
-                for a in active:
-                    state_emoji = {"running": "🟢", "initializing": "🟡", "waiting": "🔵"}.get(a.state.value, "⚪")
-                    goals_short = a.goals[:60] + "..." if len(a.goals) > 60 else a.goals
-                    lines.append(f"  {state_emoji} {a.name} ({a.state.value}): {goals_short}")
+                # Subagents (non-system)
+                subagents = [a for a in active if a.name not in system_names]
+                
+                lines.append(f"\nCortex: 🟢 active")
+                lines.append(f"DMN: {dmn_status}")
+                
+                if subagents:
+                    lines.append(f"\nSubagents ({len(subagents)} active):")
+                    for a in subagents:
+                        state_emoji = {"running": "🟢", "initializing": "🟡", "waiting": "🔵"}.get(a.state.value, "⚪")
+                        goals_short = a.goals[:60] + "..." if len(a.goals) > 60 else a.goals
+                        lines.append(f"  {state_emoji} {a.name}: {goals_short}")
                 
                 if terminated:
-                    for a in terminated[:3]:  # Show max 3 recent terminated
-                        goals_short = a.goals[:60] + "..." if len(a.goals) > 60 else a.goals
-                        lines.append(f"  ⚫ {a.name} (done): {goals_short}")
-                    if len(terminated) > 3:
-                        lines.append(f"  ... and {len(terminated) - 3} more")
+                    lines.append(f"\nRecent ({len(terminated)}):")
+                    for a in terminated[:5]:
+                        goals_short = a.goals[:50] + "..." if len(a.goals) > 50 else a.goals
+                        lines.append(f"  ⚫ {a.name}: {goals_short}")
+                    if len(terminated) > 5:
+                        lines.append(f"  ... +{len(terminated) - 5} more")
 
             await message.answer("\n".join(lines))
 
