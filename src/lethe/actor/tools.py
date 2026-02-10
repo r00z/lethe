@@ -116,6 +116,9 @@ def create_actor_tools(actor: "Actor", registry: "ActorRegistry") -> list:
     ]
 
     # --- spawn_actor: available to ALL actors (subagents can delegate too) ---
+    # Max concurrent active children per actor (prevent runaway spawning)
+    MAX_ACTIVE_CHILDREN = 5
+
     async def spawn_actor(
         name: str,
         goals: str,
@@ -126,9 +129,8 @@ def create_actor_tools(actor: "Actor", registry: "ActorRegistry") -> list:
     ) -> str:
         """Spawn a new subagent actor to handle a subtask.
         
-        Checks if an actor with this name already exists — returns it instead
-        of duplicating. Be DETAILED in goals — the subagent only knows what
-        you tell it here.
+        IMPORTANT: Before spawning, check if an existing actor can handle this.
+        Use discover_actors() first to see who's already running.
         
         Args:
             name: Short name for the actor (e.g., "researcher", "coder")
@@ -141,26 +143,62 @@ def create_actor_tools(actor: "Actor", registry: "ActorRegistry") -> list:
         Returns:
             Actor ID and confirmation, or existing actor info if duplicate
         """
+        import re
         from lethe.actor import ActorConfig, ActorState
         
+        ACTIVE_STATES = (ActorState.RUNNING, ActorState.INITIALIZING, ActorState.WAITING)
         target_group = group or actor.config.group
         
-        # Show ALL active children before spawning (awareness check)
+        # Normalize name: lowercase, strip whitespace, replace spaces/underscores with hyphens
+        name = re.sub(r'[\s_]+', '-', name.strip().lower())
+        
+        # Get ALL active children
         children = registry.get_children(actor.id)
-        active_children = [c for c in children if c.state in (ActorState.RUNNING, ActorState.INITIALIZING, ActorState.WAITING)]
+        active_children = [c for c in children if c.state in ACTIVE_STATES]
+        
+        def _format_children(children_list):
+            if not children_list:
+                return ""
+            lines = [f"  - {c.config.name} (id={c.id}, state={c.state.value}): {c.config.goals[:80]}" for c in children_list]
+            return f"\n\nActive children ({len(children_list)}):\n" + "\n".join(lines)
         
         # Check for existing actor with same name
         existing = registry.find_by_name(name, target_group)
-        if existing and existing.state in (ActorState.RUNNING, ActorState.INITIALIZING, ActorState.WAITING):
-            children_info = ""
-            if active_children:
-                lines = [f"  - {c.config.name} (id={c.id}, state={c.state.value})" for c in active_children]
-                children_info = f"\n\nAll active children:\n" + "\n".join(lines)
+        if existing and existing.state in ACTIVE_STATES:
             return (
-                f"Actor '{name}' already exists (id={existing.id}, state={existing.state.value}).\n"
+                f"DUPLICATE BLOCKED: Actor '{name}' already exists (id={existing.id}, state={existing.state.value}).\n"
                 f"Goals: {existing.config.goals}\n"
-                f"Use send_message({existing.id}, ...) to communicate with it."
-                f"{children_info}"
+                f"Use send_message({existing.id}, ...) to communicate with it, or kill_actor({existing.id}) first."
+                f"{_format_children(active_children)}"
+            )
+        
+        # Check for similar goals among active children (fuzzy dedup)
+        # Warn if spawning when children with overlapping goals exist
+        goals_lower = goals.lower()
+        similar = []
+        for c in active_children:
+            # Simple keyword overlap check
+            child_words = set(c.config.goals.lower().split())
+            goal_words = set(goals_lower.split())
+            overlap = child_words & goal_words - {'the', 'a', 'an', 'to', 'and', 'or', 'in', 'for', 'of', 'is', 'it', 'on', 'at', 'by', 'with'}
+            if len(overlap) >= 3:
+                similar.append(c)
+        
+        if similar:
+            lines = [f"  - {c.config.name} (id={c.id}): {c.config.goals[:80]}" for c in similar]
+            return (
+                f"WARNING: These active children have similar goals:\n" + "\n".join(lines) + "\n\n"
+                f"If this is a duplicate, use send_message() to the existing actor instead.\n"
+                f"If you still need a new actor, kill the old one first with kill_actor(), then spawn again."
+                f"{_format_children(active_children)}"
+            )
+        
+        # Enforce max concurrent children
+        if len(active_children) >= MAX_ACTIVE_CHILDREN:
+            return (
+                f"TOO MANY CHILDREN: {len(active_children)} active (max {MAX_ACTIVE_CHILDREN}).\n"
+                f"Kill or wait for existing actors before spawning new ones."
+                f"{_format_children(active_children)}"
             )
         
         tool_list = [t.strip() for t in tools.split(",") if t.strip()] if tools else []
@@ -177,18 +215,15 @@ def create_actor_tools(actor: "Actor", registry: "ActorRegistry") -> list:
         child = registry.spawn(config, spawned_by=actor.id)
         
         model_info = f", model={model}" if model else ", model=aux (default)"
-        children_info = ""
-        active_children = [c for c in registry.get_children(actor.id) if c.state in (ActorState.RUNNING, ActorState.INITIALIZING, ActorState.WAITING)]
-        if len(active_children) > 1:  # More than just the new one
-            lines = [f"  - {c.config.name} (id={c.id}, state={c.state.value})" for c in active_children]
-            children_info = f"\n\nAll active children:\n" + "\n".join(lines)
+        # Refresh active children (now includes new child)
+        active_children = [c for c in registry.get_children(actor.id) if c.state in ACTIVE_STATES]
         
         return (
             f"Spawned actor '{name}' (id={child.id}, group={target_group}{model_info}).\n"
             f"Goals: {goals[:200]}\n"
             f"Tools: default (bash, file I/O, grep){' + ' + ', '.join(tool_list) if tool_list else ''} + actor tools\n"
             f"It will work autonomously and message you when done."
-            f"{children_info}"
+            f"{_format_children(active_children)}"
         )
     
     tools.append((spawn_actor, False))

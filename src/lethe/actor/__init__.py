@@ -228,6 +228,12 @@ class Actor:
             parts.append("For ANY task, spawn a subagent with the right tools and detailed goals.")
             parts.append("Be specific in goals — the subagent only knows what you tell it.")
             parts.append("Monitor subagents with ping_actor(). Kill stuck ones with kill_actor().")
+            parts.append("")
+            parts.append("CRITICAL — NEVER spawn duplicates:")
+            parts.append("- ALWAYS call discover_actors() BEFORE spawning to see who's already running")
+            parts.append("- If an actor with similar goals exists, send_message() to it instead")
+            parts.append("- ONE actor per task. Do NOT spawn multiple actors for the same request")
+            parts.append("- Reuse existing actors when possible")
         else:
             parent = self.registry.get(self.spawned_by)
             parent_name = parent.config.name if parent else self.spawned_by
