@@ -29,6 +29,7 @@ class TelegramBot:
         self.settings = settings or get_settings()
         self.conversation_manager = conversation_manager
         self.process_callback = process_callback
+        self.actor_system = None  # Set after ActorSystem.setup()
         self.heartbeat_callback = heartbeat_callback
 
         self.bot = Bot(
@@ -77,10 +78,34 @@ class TelegramBot:
             elif is_debouncing:
                 status = "waiting for more input"
 
-            await message.answer(
-                f"Status: {status}\n"
-                f"Pending messages: {pending}"
-            )
+            lines = [
+                f"Status: {status}",
+                f"Pending messages: {pending}",
+            ]
+            
+            # Actor system info
+            if self.actor_system and hasattr(self.actor_system, 'registry'):
+                from lethe.actor import ActorState
+                actors = self.actor_system.registry.all_actors()
+                
+                active = [a for a in actors if a.state in (ActorState.RUNNING, ActorState.INITIALIZING, ActorState.WAITING)]
+                terminated = [a for a in actors if a.state == ActorState.TERMINATED]
+                
+                lines.append(f"\nActors: {len(active)} active, {len(terminated)} terminated")
+                
+                for a in active:
+                    state_emoji = {"running": "🟢", "initializing": "🟡", "waiting": "🔵"}.get(a.state.value, "⚪")
+                    goals_short = a.goals[:60] + "..." if len(a.goals) > 60 else a.goals
+                    lines.append(f"  {state_emoji} {a.name} ({a.state.value}): {goals_short}")
+                
+                if terminated:
+                    for a in terminated[:3]:  # Show max 3 recent terminated
+                        goals_short = a.goals[:60] + "..." if len(a.goals) > 60 else a.goals
+                        lines.append(f"  ⚫ {a.name} (done): {goals_short}")
+                    if len(terminated) > 3:
+                        lines.append(f"  ... and {len(terminated) - 3} more")
+
+            await message.answer("\n".join(lines))
 
         @self.dp.message(Command("stop"))
         async def handle_stop(message: Message):

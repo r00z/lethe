@@ -55,7 +55,7 @@ class ActorConfig:
     goals: str = ""                        # What this actor should accomplish
     model: str = ""                        # LLM model override (empty = use aux)
     tools: List[str] = field(default_factory=list)  # Tool names available to this actor
-    max_turns: int = 20                    # Max LLM turns before forced termination
+    max_turns: int = 50                    # Max LLM turns before forced termination
     max_messages: int = 50                 # Max inter-actor messages
 
 

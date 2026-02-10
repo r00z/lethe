@@ -245,6 +245,10 @@ async def run():
     # Set heartbeat trigger on telegram bot for /heartbeat command
     telegram_bot.heartbeat_callback = heartbeat.trigger
     
+    # Wire actor system into telegram bot for /status command
+    if actor_system:
+        telegram_bot.actor_system = actor_system
+    
     # Wire DMN callbacks (send_to_user, get_reminders)
     if actor_system:
         actor_system.set_callbacks(

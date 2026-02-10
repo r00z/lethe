@@ -125,7 +125,7 @@ def create_actor_tools(actor: "Actor", registry: "ActorRegistry") -> list:
         group: str = "",
         tools: str = "",
         model: str = "",
-        max_turns: int = 20,
+        max_turns: int = 50,
     ) -> str:
         """Spawn a new subagent actor to handle a subtask.
         
@@ -138,7 +138,7 @@ def create_actor_tools(actor: "Actor", registry: "ActorRegistry") -> list:
             group: Actor group for discovery (default: same as yours)
             tools: Comma-separated EXTRA tool names beyond the defaults. All subagents always get: bash, read_file, write_file, edit_file, list_directory, grep_search. Specify extras like: "web_search,fetch_webpage,browser_open" etc.
             model: LLM model override (empty = default aux model). Use main model for complex reasoning.
-            max_turns: Max LLM turns before forced termination (default 20)
+            max_turns: Max LLM turns before forced termination (default 50)
             
         Returns:
             Actor ID and confirmation, or existing actor info if duplicate
