@@ -86,7 +86,7 @@ class TelegramBot:
             # Actor system info
             if self.actor_system and hasattr(self.actor_system, 'registry'):
                 from lethe.actor import ActorState
-                actors = self.actor_system.registry.all_actors()
+                actors = self.actor_system.registry.all_actors
                 
                 active = [a for a in actors if a.state in (ActorState.RUNNING, ActorState.INITIALIZING, ActorState.WAITING)]
                 terminated = [a for a in actors if a.state == ActorState.TERMINATED]
