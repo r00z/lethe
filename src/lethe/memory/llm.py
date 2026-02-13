@@ -791,6 +791,9 @@ class AsyncLLMClient:
         # Persistence callback: (role, content, metadata) -> None
         self._on_message_persist = on_message_persist
         
+        # Stop flag: set by terminate() tool to prevent extra API calls
+        self._stop_after_tool = False
+        
         # Set up summarizer callback
         self.context._summarizer = self._summarize_messages_sync
         
@@ -1097,6 +1100,12 @@ class AsyncLLMClient:
                         content=multimodal_content,
                     ))
                     logger.info(f"Injected image into context: {image['path']}")
+                
+                # Check if a tool (e.g. terminate()) requested early stop
+                if self._stop_after_tool:
+                    logger.info("Early stop requested by tool — skipping further API calls")
+                    self._stop_after_tool = False
+                    return content or "Done."
                 
                 continue  # Loop to get next response
             
