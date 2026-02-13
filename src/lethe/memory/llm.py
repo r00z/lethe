@@ -16,6 +16,7 @@ import litellm
 from litellm import acompletion, completion
 
 from lethe.utils import strip_model_tags
+from lethe.memory.anthropic_oauth import AnthropicOAuth, is_oauth_available
 
 logger = logging.getLogger(__name__)
 
@@ -793,6 +794,12 @@ class AsyncLLMClient:
         # Set up summarizer callback
         self.context._summarizer = self._summarize_messages_sync
         
+        # OAuth client (for Claude Max/Pro subscription — bypasses litellm)
+        self._oauth: Optional[AnthropicOAuth] = None
+        if self.config.provider == "anthropic" and is_oauth_available():
+            self._oauth = AnthropicOAuth()
+            logger.info("OAuth: enabled (bypassing litellm for Anthropic calls)")
+        
         logger.info(f"AsyncLLMClient initialized with model {self.config.model}")
     
     def _add_and_persist(self, message: "Message"):
@@ -1213,23 +1220,10 @@ class AsyncLLMClient:
         raise last_error
     
     async def _call_api(self) -> Dict:
-        """Make API call via litellm."""
+        """Make API call via litellm (or OAuth if enabled)."""
         # Pre-flight: force compaction if context is too large
         self.context._compress_if_needed()
         messages = self.context.build_messages()
-        
-        kwargs = await self._get_api_kwargs()
-        kwargs["messages"] = messages
-        
-        if self.tools:
-            tools = [t.copy() for t in self.tools]
-            # Anthropic prompt caching: mark last tool for 1-hour caching
-            # Cache order is tools → system → messages
-            # Tools never change during a session → 1h TTL (2x write, paid once)
-            is_anthropic = "claude" in self.config.model.lower() or "anthropic" in self.config.model.lower()
-            if is_anthropic and tools:
-                tools[-1]["cache_control"] = {"type": "ephemeral", "ttl": "1h"}
-            kwargs["tools"] = tools
         
         # Notify console of context build
         token_count = self.context.count_tokens("".join(str(m) for m in messages))
@@ -1237,10 +1231,25 @@ class AsyncLLMClient:
         self._notify_status("thinking")
         
         logger.debug(f"API call: {len(messages)} messages, {len(self.tools)} tools")
+        
+        # OAuth path: bypass litellm entirely
+        if self._oauth:
+            return await self._call_api_oauth(messages, self.tools)
+        
+        # Standard litellm path
+        kwargs = await self._get_api_kwargs()
+        kwargs["messages"] = messages
+        
+        if self.tools:
+            tools = [t.copy() for t in self.tools]
+            # Anthropic prompt caching: mark last tool for 1-hour caching
+            is_anthropic = "claude" in self.config.model.lower() or "anthropic" in self.config.model.lower()
+            if is_anthropic and tools:
+                tools[-1]["cache_control"] = {"type": "ephemeral", "ttl": "1h"}
+            kwargs["tools"] = tools
 
         debug_ts = None
         if LLM_DEBUG:
-            # Dump full context only in debug mode.
             try:
                 debug_path = Path("logs/llm")
                 debug_path.mkdir(parents=True, exist_ok=True)
@@ -1265,14 +1274,61 @@ class AsyncLLMClient:
         
         return result
     
+    async def _call_api_oauth(self, messages: List[Dict], tools: Optional[List[Dict]] = None) -> Dict:
+        """Make API call via Anthropic OAuth (Claude Max/Pro subscription)."""
+        debug_ts = None
+        if LLM_DEBUG:
+            try:
+                debug_path = Path("logs/llm")
+                debug_path.mkdir(parents=True, exist_ok=True)
+                debug_ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+                (debug_path / f"{debug_ts}_oauth_request.json").write_text(
+                    json.dumps({"model": self.config.model, "messages": len(messages), "tools": len(tools or [])}, indent=2, default=str)
+                )
+            except Exception:
+                pass
+        
+        result = await self._oauth.call_messages(
+            messages=messages,
+            tools=tools if tools else None,
+            model=self.config.model,
+            max_tokens=self.config.max_output_tokens,
+        )
+        
+        self._track_usage(result)
+        _log_llm_interaction({"model": self.config.model, "oauth": True}, result, "chat_oauth")
+        
+        if LLM_DEBUG and debug_ts:
+            try:
+                debug_path = Path("logs/llm")
+                (debug_path / f"{debug_ts}_oauth_response.json").write_text(
+                    json.dumps(result, indent=2, default=str)
+                )
+            except Exception:
+                pass
+        
+        return result
+    
     async def _call_api_no_tools(self) -> Dict:
         """Make API call without tools (for final response after hitting limit)."""
         messages = self.context.build_messages()
         
+        logger.debug(f"API call (no tools): {len(messages)} messages")
+        
+        # OAuth path
+        if self._oauth:
+            result = await self._oauth.call_messages(
+                messages=messages,
+                tools=None,
+                model=self.config.model,
+                max_tokens=self.config.max_output_tokens,
+            )
+            self._track_usage(result)
+            return result
+        
+        # Standard litellm path
         kwargs = await self._get_api_kwargs()
         kwargs["messages"] = messages
-        
-        logger.debug(f"API call (no tools): {len(messages)} messages")
         
         result = await self._call_with_retry(kwargs, "chat_no_tools")
         self._track_usage(result)
