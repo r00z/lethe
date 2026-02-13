@@ -1184,6 +1184,10 @@ class AsyncLLMClient:
         """Make API call with retry logic for transient errors."""
         import asyncio
         
+        # OAuth path: route through direct Anthropic API
+        if self._oauth:
+            return await self._call_with_retry_oauth(kwargs, log_type, max_retries)
+        
         last_error = None
         for attempt in range(max_retries):
             try:
@@ -1219,6 +1223,47 @@ class AsyncLLMClient:
         logger.error(f"API call failed after {max_retries} attempts: {last_error}")
         raise last_error
     
+    async def _call_with_retry_oauth(self, kwargs: Dict, log_type: str, max_retries: int = 5) -> Dict:
+        """Route any litellm-style kwargs through OAuth instead."""
+        import asyncio
+        
+        messages = kwargs.get("messages", [])
+        tools = kwargs.get("tools")
+        model = kwargs.get("model", self.config.model)
+        max_tokens = kwargs.get("max_tokens", self.config.max_output_tokens)
+        
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                result = await self._oauth.call_messages(
+                    messages=messages,
+                    tools=tools if tools else None,
+                    model=model,
+                    max_tokens=max_tokens,
+                )
+                _log_llm_interaction(kwargs, result, f"{log_type}_oauth")
+                return result
+            except Exception as e:
+                last_error = e
+                error_str = str(e).lower()
+                
+                is_rate_limit = any(x in error_str for x in ["rate_limit", "rate limit", "429", "too many requests"])
+                is_transient = any(x in error_str for x in ["timeout", "overloaded", "503", "502", "500"])
+                
+                if is_rate_limit:
+                    wait_time = min(60, 15 * (attempt + 1))
+                    logger.warning(f"OAuth rate limit (attempt {attempt + 1}/{max_retries}), waiting {wait_time}s...")
+                    await asyncio.sleep(wait_time)
+                elif is_transient:
+                    wait_time = (attempt + 1) * 2
+                    logger.warning(f"OAuth transient error (attempt {attempt + 1}/{max_retries}), retrying in {wait_time}s: {e}")
+                    await asyncio.sleep(wait_time)
+                else:
+                    raise
+        
+        logger.error(f"OAuth call failed after {max_retries} attempts: {last_error}")
+        raise last_error
+    
     async def _call_api(self) -> Dict:
         """Make API call via litellm (or OAuth if enabled)."""
         # Pre-flight: force compaction if context is too large
@@ -1232,11 +1277,6 @@ class AsyncLLMClient:
         
         logger.debug(f"API call: {len(messages)} messages, {len(self.tools)} tools")
         
-        # OAuth path: bypass litellm entirely
-        if self._oauth:
-            return await self._call_api_oauth(messages, self.tools)
-        
-        # Standard litellm path
         kwargs = await self._get_api_kwargs()
         kwargs["messages"] = messages
         
@@ -1274,59 +1314,12 @@ class AsyncLLMClient:
         
         return result
     
-    async def _call_api_oauth(self, messages: List[Dict], tools: Optional[List[Dict]] = None) -> Dict:
-        """Make API call via Anthropic OAuth (Claude Max/Pro subscription)."""
-        debug_ts = None
-        if LLM_DEBUG:
-            try:
-                debug_path = Path("logs/llm")
-                debug_path.mkdir(parents=True, exist_ok=True)
-                debug_ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-                (debug_path / f"{debug_ts}_oauth_request.json").write_text(
-                    json.dumps({"model": self.config.model, "messages": len(messages), "tools": len(tools or [])}, indent=2, default=str)
-                )
-            except Exception:
-                pass
-        
-        result = await self._oauth.call_messages(
-            messages=messages,
-            tools=tools if tools else None,
-            model=self.config.model,
-            max_tokens=self.config.max_output_tokens,
-        )
-        
-        self._track_usage(result)
-        _log_llm_interaction({"model": self.config.model, "oauth": True}, result, "chat_oauth")
-        
-        if LLM_DEBUG and debug_ts:
-            try:
-                debug_path = Path("logs/llm")
-                (debug_path / f"{debug_ts}_oauth_response.json").write_text(
-                    json.dumps(result, indent=2, default=str)
-                )
-            except Exception:
-                pass
-        
-        return result
-    
     async def _call_api_no_tools(self) -> Dict:
         """Make API call without tools (for final response after hitting limit)."""
         messages = self.context.build_messages()
         
         logger.debug(f"API call (no tools): {len(messages)} messages")
         
-        # OAuth path
-        if self._oauth:
-            result = await self._oauth.call_messages(
-                messages=messages,
-                tools=None,
-                model=self.config.model,
-                max_tokens=self.config.max_output_tokens,
-            )
-            self._track_usage(result)
-            return result
-        
-        # Standard litellm path
         kwargs = await self._get_api_kwargs()
         kwargs["messages"] = messages
         
@@ -1348,10 +1341,10 @@ class AsyncLLMClient:
         """
         kwargs = await self._get_api_kwargs()
         kwargs["messages"] = [{"role": "user", "content": prompt}]
-        kwargs["temperature"] = 0.3  # Lower temperature for factual tasks
+        kwargs["temperature"] = 0.3
         kwargs["max_tokens"] = 2000
         
-        # Use aux model if requested
+        # Use aux model if requested (for OAuth: same provider, just different model)
         if use_aux:
             kwargs["model"] = self.config.model_aux
         
