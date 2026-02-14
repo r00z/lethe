@@ -309,6 +309,30 @@ class Hippocampus:
             logger.warning(f"Conversation search failed: {e}")
             return []
     
+    @staticmethod
+    def _trim_entry(text: str, max_lines: int = 50) -> str:
+        """Trim a single memory entry by lines. 
+        
+        If over max_lines, keep first max_lines. If still over 10K chars
+        after line trimming, replace with a placeholder.
+        """
+        MAX_ENTRY_CHARS = 10000
+        
+        if not isinstance(text, str):
+            text = str(text)
+        
+        lines = text.split("\n")
+        if len(lines) > max_lines:
+            text = "\n".join(lines[:max_lines])
+        
+        # If still huge after line trim (long lines), replace entirely
+        if len(text) > MAX_ENTRY_CHARS:
+            # Extract a meaningful summary from first line
+            first_line = lines[0][:200] if lines else "unknown content"
+            return f"[large entry: {len(lines)} lines, {len(text):,} chars — {first_line}]"
+        
+        return text
+    
     def _format_memories(
         self,
         archival: list[dict],
@@ -329,11 +353,13 @@ class Hippocampus:
                 if total_lines >= max_lines:
                     break
                     
-                text = mem.get("text", "")
+                text = self._trim_entry(mem.get("text", ""))
                 created = mem.get("created_at", "")[:16].replace("T", " ")  # YYYY-MM-DD HH:MM
                 
-                archival_lines.append(f"- [{created}] {text}")
-                total_lines += 1
+                entry = f"- [{created}] {text}"
+                entry_lines = entry.count("\n") + 1
+                archival_lines.append(entry)
+                total_lines += entry_lines
             
             if archival_lines:
                 sections.append("**From long-term memory:**\n" + "\n".join(archival_lines))
@@ -346,11 +372,13 @@ class Hippocampus:
                     break
                     
                 role = msg.get("role", "?")
-                content = msg.get("content", "")
+                content = self._trim_entry(msg.get("content", ""))
                 created = msg.get("created_at", "")[:16].replace("T", " ")  # YYYY-MM-DD HH:MM
                 
-                conv_lines.append(f"- [{created}] {role}: {content}")
-                total_lines += 1
+                entry = f"- [{created}] {role}: {content}"
+                entry_lines = entry.count("\n") + 1
+                conv_lines.append(entry)
+                total_lines += entry_lines
             
             if conv_lines:
                 sections.append("**From past conversations:**\n" + "\n".join(conv_lines))
