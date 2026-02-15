@@ -3,16 +3,28 @@ set -e
 
 # If HOST_UID is provided, create a user matching the host user
 if [ -n "$HOST_UID" ]; then
-    # Create user with matching UID/GID
-    groupadd -g "${HOST_GID:-$HOST_UID}" hostuser 2>/dev/null || true
-    useradd -u "$HOST_UID" -g "${HOST_GID:-$HOST_UID}" -m -s /bin/bash hostuser 2>/dev/null || true
-    
+    GID="${HOST_GID:-$HOST_UID}"
+
+    # Allow UIDs below 1000 (e.g., for macOS users)
+    sed -i 's/^UID_MIN.*/UID_MIN 100/' /etc/login.defs
+    sed -i 's/^GID_MIN.*/GID_MIN 100/' /etc/login.defs
+
+    # Create group if it doesn't exist
+    if ! getent group "$GID" >/dev/null; then
+        groupadd -g "$GID" hostuser
+    fi
+
+    # Create user if it doesn't exist
+    if ! getent passwd "$HOST_UID" >/dev/null; then
+        useradd -u "$HOST_UID" -g "$GID" -m -s /bin/bash hostuser
+    fi
+
     # Give sudo access
     echo "hostuser ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
-    
-    # Change ownership of app directory (venv was created by root during build)
-    chown -R hostuser:hostuser /app
-    
+
+    # Change ownership of app directory
+    chown -R "$HOST_UID:$GID" /app
+
     # Run as the host user
     exec gosu hostuser "$@"
 else
