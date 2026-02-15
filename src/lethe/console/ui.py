@@ -541,6 +541,7 @@ class ConsoleUI:
         actors = status.get("actors", [])
         last_event = status.get("actor_last_event_at", {})
         recent_events = status.get("recent_events", [])
+        lifecycle_events = status.get("lifecycle_events", [])
         dmn_history = (state.dmn or {}).get("round_history", [])
         amygdala_history = (state.amygdala or {}).get("round_history", [])
         hip_trace = (state.hippocampus or {}).get("recent_trace", [])
@@ -566,6 +567,17 @@ class ConsoleUI:
                 )
         else:
             html.append('<div class="mc-empty">No actor data</div>')
+
+        html.append('<div class="mc-subhead">Actor Lifecycle</div>')
+        if lifecycle_events:
+            for e in lifecycle_events[-12:][::-1]:
+                event_type = str(e.get("type", ""))
+                actor_name = str(e.get("actor_name", "") or e.get("actor_id", ""))
+                age = self._age_short(e.get("created_at", ""))
+                verb = "spawned" if event_type == "actor_spawned" else "terminated"
+                html.append(f'<div class="mc-row"><b>{verb}</b> {_esc(actor_name)} {age} ago</div>')
+        else:
+            html.append('<div class="mc-row">No lifecycle events yet</div>')
 
         html.append('<div class="mc-subhead">DMN Rounds</div>')
         if dmn_history:

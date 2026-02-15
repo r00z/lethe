@@ -1,5 +1,6 @@
 """Filesystem tools for the agent."""
 
+import os
 from lethe.tools.truncate import (
     truncate_head,
     format_truncation_notice,
@@ -13,6 +14,22 @@ def _is_tool(func):
     """Decorator to mark a function as a Letta tool."""
     func._is_tool = True
     return func
+
+
+def _workspace_root():
+    from pathlib import Path
+    return Path(os.environ.get("WORKSPACE_DIR", os.path.expanduser("~/lethe"))).expanduser().resolve()
+
+
+def _is_broad_recursive_target(path):
+    """Detect dangerous broad recursive scan targets."""
+    from pathlib import Path
+    try:
+        p = Path(path).expanduser().resolve()
+    except Exception:
+        return False
+    home = Path(os.path.expanduser("~")).resolve()
+    return p == Path("/") or p == home
 
 
 @_is_tool
@@ -168,11 +185,16 @@ def list_directory(path: str = ".", show_hidden: bool = False) -> str:
     from pathlib import Path
     
     try:
-        dir_path = Path(path).expanduser().resolve()
+        raw_path = path
+        if raw_path.strip() in ("", "."):
+            raw_path = str(_workspace_root())
+        dir_path = Path(raw_path).expanduser().resolve()
+        if dir_path == Path("/"):
+            return "Error: Refusing to list filesystem root. Use a narrower path (prefer WORKSPACE_DIR)."
         if not dir_path.exists():
-            return f"Error: Directory not found: {path}"
+            return f"Error: Directory not found: {raw_path}"
         if not dir_path.is_dir():
-            return f"Error: Not a directory: {path}"
+            return f"Error: Not a directory: {raw_path}"
 
         entries = []
         for entry in sorted(dir_path.iterdir()):
@@ -213,7 +235,12 @@ def glob_search(pattern: str, path: str = ".") -> str:
     from pathlib import Path
     
     try:
-        base_path = Path(path).expanduser().resolve()
+        raw_path = path
+        if raw_path.strip() in ("", "."):
+            raw_path = str(_workspace_root())
+        base_path = Path(raw_path).expanduser().resolve()
+        if _is_broad_recursive_target(base_path):
+            return "Error: Refusing broad recursive search in root/home. Set a narrower path (prefer WORKSPACE_DIR)."
         matches = list(base_path.glob(pattern))
 
         matches.sort(key=lambda p: p.stat().st_mtime if p.exists() else 0, reverse=True)
@@ -255,7 +282,12 @@ def grep_search(pattern: str, path: str = ".", file_pattern: str = "*") -> str:
     from lethe.tools.truncate import truncate_line
     
     try:
-        base_path = Path(path).expanduser().resolve()
+        raw_path = path
+        if raw_path.strip() in ("", "."):
+            raw_path = str(_workspace_root())
+        base_path = Path(raw_path).expanduser().resolve()
+        if _is_broad_recursive_target(base_path):
+            return "Error: Refusing broad recursive search in root/home. Set a narrower path (prefer WORKSPACE_DIR)."
         regex = re.compile(pattern)
 
         results = []

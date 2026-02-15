@@ -386,6 +386,10 @@ class ActorSystem:
     def status(self) -> dict:
         all_events = self.registry.events.query(limit=500)
         recent_events = all_events[-10:]
+        lifecycle_events = [
+            e for e in all_events
+            if e.event_type in {"actor_spawned", "actor_terminated"}
+        ][-30:]
         dmn_status = self.dmn.status if self.dmn else {}
         amygdala_status = self.amygdala.status if self.amygdala else {}
         actor_last_event_at: dict[str, str] = {}
@@ -419,6 +423,18 @@ class ActorSystem:
                     "created_at": e.created_at.isoformat(),
                 }
                 for e in recent_events
+            ],
+            "lifecycle_events": [
+                {
+                    "type": e.event_type,
+                    "actor_id": e.actor_id,
+                    "actor_name": (
+                        (e.payload.get("name") if isinstance(e.payload, dict) else "")
+                        or (self.registry.get(e.actor_id).config.name if self.registry.get(e.actor_id) else "")
+                    ),
+                    "created_at": e.created_at.isoformat(),
+                }
+                for e in lifecycle_events
             ],
             "dmn": dmn_status,
             "amygdala": amygdala_status,

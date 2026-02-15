@@ -695,7 +695,7 @@ class ActorRegistry:
         self.emit_event(
             "actor_terminated",
             actor,
-            {"result": actor._result or "", "turns": actor._turns},
+            {"name": actor.config.name, "result": actor._result or "", "turns": actor._turns},
         )
 
     @property
