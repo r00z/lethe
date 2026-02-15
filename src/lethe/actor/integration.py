@@ -82,9 +82,14 @@ class ActorSystem:
             human = blocks.get("human") or {}
             project = blocks.get("project") or {}
 
-            def _extract(value: str, max_chars: int = 1800) -> str:
+            def _extract(value: str, max_lines: int = 40) -> str:
                 text = (value or "").strip()
-                return text[:max_chars]
+                if not text:
+                    return ""
+                lines = text.splitlines()
+                if len(lines) <= max_lines:
+                    return text
+                return "\n".join(lines[:max_lines]) + "\n...[truncated by lines]"
 
             parts = []
             if identity.get("value"):

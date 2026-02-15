@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import json
 import os
-import time
 from contextvars import ContextVar
 from pathlib import Path
 from typing import Any, Optional
@@ -243,16 +242,6 @@ def telegram_send_file(
 
 # Context variable for last message (for reactions)
 _last_message_id: ContextVar[Optional[int]] = ContextVar('last_message_id', default=None)
-_last_reaction_ts_by_chat: dict[int, float] = {}
-
-
-def _reaction_cooldown_seconds() -> int:
-    """Cooldown between reactions per chat."""
-    raw = os.environ.get("TELEGRAM_REACT_COOLDOWN_SECONDS", "600")
-    try:
-        return max(0, int(raw))
-    except Exception:
-        return 600
 
 
 def set_last_message_id(message_id: int):
@@ -277,27 +266,12 @@ async def telegram_react_async(emoji: str = "👍") -> str:
     
     if not bot or not chat_id or not message_id:
         raise RuntimeError("Telegram context not set or no message to react to.")
-
-    cooldown = _reaction_cooldown_seconds()
-    now = time.time()
-    last_ts = _last_reaction_ts_by_chat.get(chat_id, 0.0)
-    elapsed = now - last_ts
-    if cooldown > 0 and elapsed < cooldown:
-        return json.dumps({
-            "success": False,
-            "skipped": True,
-            "reason": f"reaction cooldown active ({int(cooldown - elapsed)}s left)",
-            "emoji": emoji,
-            "message_id": message_id,
-            "cooldown_seconds": cooldown,
-        })
     
     await bot.set_message_reaction(
         chat_id=chat_id,
         message_id=message_id,
         reaction=[ReactionTypeEmoji(emoji=emoji)]
     )
-    _last_reaction_ts_by_chat[chat_id] = now
     
     return json.dumps({
         "success": True,

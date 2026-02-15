@@ -443,7 +443,16 @@ class DefaultModeNetwork:
         status["round_history"] = list(self._round_history)
         return status
 
-    def get_context_view(self, max_chars: int = 5000) -> str:
+    @staticmethod
+    def _take_lines(text: str, max_lines: int) -> str:
+        if not text:
+            return ""
+        lines = str(text).splitlines()
+        if len(lines) <= max_lines:
+            return str(text)
+        return "\n".join(lines[:max_lines]) + "\n...[truncated by lines]"
+
+    def get_context_view(self, max_lines: int = 220) -> str:
         """Build a dashboard-friendly DMN context snapshot."""
         try:
             if os.path.exists(DMN_STATE_FILE):
@@ -474,9 +483,9 @@ class DefaultModeNetwork:
             f"- last_error: {status.get('last_error') or '-'}",
             "",
             "## Principal context snapshot",
-            principal_context[:1800] or "(none)",
+            self._take_lines(principal_context, max_lines=80) or "(none)",
             "",
             "## dmn_state.md",
-            state_text[:max_chars] if state_text else "(empty)",
+            self._take_lines(state_text, max_lines=max_lines) if state_text else "(empty)",
         ]
         return "\n".join(lines)

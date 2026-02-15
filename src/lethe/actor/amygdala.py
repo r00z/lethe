@@ -27,7 +27,7 @@ AMYGDALA_TAGS_FILE = os.path.join(WORKSPACE_DIR, "emotional_tags.md")
 
 HIGH_AROUSAL_THRESHOLD = 0.75
 FLASHBACK_LOOKBACK = 12
-TAG_LOG_MAX_CHARS = 24000
+TAG_LOG_MAX_LINES = 300
 TAG_LOG_KEEP_LINES = 140
 
 AMYGDALA_SYSTEM_PROMPT_TEMPLATE = load_prompt_template(
@@ -240,7 +240,7 @@ class Amygdala:
 
         prompt = AMYGDALA_SYSTEM_PROMPT_TEMPLATE.format(
             workspace=WORKSPACE_DIR,
-            principal_context=principal_context[:4000] or "(none)",
+            principal_context=self._take_lines(principal_context, max_lines=90) or "(none)",
         )
         return AsyncLLMClient(config=config, system_prompt=prompt, usage_scope="amygdala")
 
@@ -288,7 +288,7 @@ class Amygdala:
             ),
         )
         prompt = classifier_prompt.format(
-            previous_state=previous_state[:1200],
+            previous_state=self._take_lines(previous_state, max_lines=40),
             recent_signals=recent_signals,
         )
 
@@ -376,11 +376,10 @@ class Amygdala:
             if not os.path.exists(AMYGDALA_TAGS_FILE):
                 return
             with open(AMYGDALA_TAGS_FILE, "r") as f:
-                content = f.read()
-            if len(content) <= TAG_LOG_MAX_CHARS:
+                lines = f.read().splitlines()
+            if len(lines) <= TAG_LOG_MAX_LINES:
                 return
 
-            lines = content.splitlines()
             keep = lines[-TAG_LOG_KEEP_LINES:] if len(lines) > TAG_LOG_KEEP_LINES else lines
             pruned = max(0, len(lines) - len(keep))
             now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
@@ -395,6 +394,15 @@ class Amygdala:
             self._status["tags_pruned_total"] = int(self._status.get("tags_pruned_total", 0)) + pruned
         except Exception as e:
             logger.warning("Amygdala: failed to compact tag log: %s", e)
+
+    @staticmethod
+    def _take_lines(text: str, max_lines: int) -> str:
+        if not text:
+            return ""
+        lines = str(text).splitlines()
+        if len(lines) <= max_lines:
+            return str(text)
+        return "\n".join(lines[:max_lines]) + "\n...[truncated by lines]"
 
     def _update_active_patterns(self, seed_tags: str):
         try:
@@ -429,7 +437,7 @@ class Amygdala:
         status["active_patterns"] = list(self._active_patterns)
         return status
 
-    def get_context_view(self, max_chars: int = 5000) -> str:
+    def get_context_view(self, max_lines: int = 220) -> str:
         state_text = self._read_file(AMYGDALA_STATE_FILE, "(amygdala_state.md not found)")
         tags_text = self._read_file(AMYGDALA_TAGS_FILE, "(emotional_tags.md not found)")
         lines = [
@@ -447,9 +455,9 @@ class Amygdala:
             ", ".join(self.status.get("active_patterns", [])) or "(none)",
             "",
             "## amygdala_state.md",
-            state_text[: max_chars // 2],
+            self._take_lines(state_text, max_lines=max_lines // 2),
             "",
             "## emotional_tags.md",
-            tags_text[: max_chars // 2],
+            self._take_lines(tags_text, max_lines=max_lines // 2),
         ]
         return "\n".join(lines)
