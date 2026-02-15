@@ -754,6 +754,16 @@ class ConsoleUI:
     def _render_message_html(self, role, content, timestamp=None):
         r = ROLES.get(role, ROLES["system"])
         time_html = f'<span class="mc-msg-time">{_esc(timestamp)}</span>' if timestamp else ''
+        if isinstance(content, list):
+            parts = []
+            for block in content:
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") == "text":
+                    parts.append(str(block.get("text", "")))
+                elif block.get("type") == "image_url":
+                    parts.append("[image omitted]")
+            content = "\n---\n".join([p for p in parts if p]) or f"[{len(content)} content blocks]"
         return f'''<div class="mc-msg" style="border-color:{r['color']};background:{r['bg']}">
             <div class="mc-msg-header">
                 <span class="mc-msg-role" style="color:{r['color']}">{r['label']}</span>

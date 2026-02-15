@@ -12,6 +12,7 @@ from typing import Optional, Dict, List, Any
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from collections import deque
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +87,49 @@ class ConsoleState:
 _state = ConsoleState()
 
 
+_DATA_URL_RE = re.compile(r"data:image/[^;]+;base64,[A-Za-z0-9+/=\s]+", re.IGNORECASE)
+
+
+def _sanitize_text_payload(text: str) -> str:
+    if not isinstance(text, str) or not text:
+        return text
+    # Replace embedded data URLs with a compact marker.
+    return _DATA_URL_RE.sub("[image base64 omitted]", text)
+
+
+def _sanitize_content(content):
+    """Redact image/base64 payloads before storing console state."""
+    if isinstance(content, str):
+        return _sanitize_text_payload(content)
+    if isinstance(content, list):
+        sanitized = []
+        for part in content:
+            if not isinstance(part, dict):
+                sanitized.append(part)
+                continue
+            p = dict(part)
+            if p.get("type") == "image_url":
+                image = p.get("image_url")
+                if isinstance(image, dict):
+                    url = str(image.get("url", ""))
+                    if url.startswith("data:image/"):
+                        image = dict(image)
+                        image["url"] = "[image base64 omitted]"
+                        p["image_url"] = image
+                elif isinstance(image, str) and image.startswith("data:image/"):
+                    p["image_url"] = "[image base64 omitted]"
+            if p.get("type") == "text":
+                p["text"] = _sanitize_text_payload(str(p.get("text", "")))
+            sanitized.append(p)
+        return sanitized
+    if isinstance(content, dict):
+        out = {}
+        for k, v in content.items():
+            out[k] = _sanitize_content(v)
+        return out
+    return content
+
+
 def get_state() -> ConsoleState:
     """Get the global console state."""
     return _state
@@ -125,11 +169,13 @@ def update_messages(messages):
                 timestamp = msg.created_at.strftime("%H:%M:%S") if hasattr(msg.created_at, 'strftime') else str(msg.created_at)[:19]
             result.append({
                 "role": msg.role,
-                "content": msg.content if isinstance(msg.content, str) else str(msg.content),
+                "content": _sanitize_content(msg.content) if isinstance(msg.content, str) or isinstance(msg.content, list) else str(msg.content),
                 "timestamp": timestamp,
             })
         elif isinstance(msg, dict):
-            result.append(msg)
+            safe_msg = dict(msg)
+            safe_msg["content"] = _sanitize_content(safe_msg.get("content", ""))
+            result.append(safe_msg)
     if _state.messages != result:
         _state.messages = result
         _state.version += 1
@@ -137,7 +183,15 @@ def update_messages(messages):
 
 def update_context(context: List[Dict], tokens: int):
     """Update last built context."""
-    _state.last_context = context
+    sanitized_context = []
+    for msg in (context or []):
+        if isinstance(msg, dict):
+            safe = dict(msg)
+            safe["content"] = _sanitize_content(safe.get("content", ""))
+            sanitized_context.append(safe)
+        else:
+            sanitized_context.append(msg)
+    _state.last_context = sanitized_context
     _state.last_context_tokens = tokens
     _state.last_context_time = datetime.now()
     _state.version += 1
