@@ -24,6 +24,7 @@ if [ -n "$HOST_UID" ]; then
 
     # Change ownership of app directory
     chown -R "$HOST_UID:$GID" /app
+    chmod -R u+w /app/.venv
 
     # Run as the host user
     exec gosu hostuser "$@"
